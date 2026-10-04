@@ -458,21 +458,25 @@ object CloudDriveServerManager {
                         }
                     }
 
-                    // Fallback: check configured update folder and appDownloadUrl (GitHub Releases URL)
+                    // Fallback & Priority: check configured update folder and appDownloadUrl (GitHub Releases URL)
                     val effectiveFolderUrl = remoteConfiguredUpdateUrl ?: dataStoreManager.updateDriveFolderUrlFlow.first()
-                    val effectiveAppDlUrl = remoteConfiguredAppDownloadUrl ?: dataStoreManager.appDownloadUrlFlow.first()
+                    val effectiveAppDlUrl = (remoteConfiguredAppDownloadUrl ?: dataStoreManager.appDownloadUrlFlow.first()).ifBlank { DataStoreManager.DEFAULT_APP_DOWNLOAD_URL }
 
-                    if ((resolvedUpdate == null || !resolvedUpdate.hasUpdate) && effectiveFolderUrl.isNotBlank()) {
+                    if (effectiveFolderUrl.isNotBlank()) {
                         val folderUpdate = inspectPublicDriveUpdateLink(effectiveFolderUrl)
                         if (folderUpdate != null && folderUpdate.hasUpdate) {
-                            resolvedUpdate = folderUpdate
+                            if (resolvedUpdate == null || !resolvedUpdate.hasUpdate || folderUpdate.updatedAtMillis > resolvedUpdate.updatedAtMillis) {
+                                resolvedUpdate = folderUpdate
+                            }
                         }
                     }
 
-                    if ((resolvedUpdate == null || !resolvedUpdate.hasUpdate) && effectiveAppDlUrl.isNotBlank()) {
+                    if (effectiveAppDlUrl.isNotBlank()) {
                         val dlUpdate = inspectPublicDriveUpdateLink(effectiveAppDlUrl)
                         if (dlUpdate != null && dlUpdate.hasUpdate) {
-                            resolvedUpdate = dlUpdate
+                            if (resolvedUpdate == null || !resolvedUpdate.hasUpdate || dlUpdate.updatedAtMillis > resolvedUpdate.updatedAtMillis) {
+                                resolvedUpdate = dlUpdate
+                            }
                         }
                     }
 

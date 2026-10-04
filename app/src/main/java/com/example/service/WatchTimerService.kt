@@ -295,9 +295,12 @@ class WatchTimerService : Service() {
                 val shouldShowOverlay = sessionActive && isYtForeground && !isAppForeground && isMatched
 
                 if (shouldShowOverlay) {
-                    val searchOverlayStillActive = (YouTubeLiveSearchService.isSearchOverlayActive ||
-                            (YouTubeLiveSearchService.isServiceConnected && !YouTubeLiveSearchService.isWatchPlayerConfirmedOpen)) &&
-                            elapsedSinceLaunch < 35_000L
+                    val isVideoActuallyPlayingOrStarted = isPlaying || isAudioPlaying || hasSeenAudioPlaying || watchedMillis > 0L || YouTubeLiveSearchService.isWatchPlayerConfirmedOpen
+                    val searchOverlayStillActive = !isVideoActuallyPlayingOrStarted &&
+                            YouTubeLiveSearchService.isSearchOverlayActive &&
+                            !YouTubeLiveSearchService.hasClickedTarget &&
+                            elapsedSinceLaunch < 15_000L
+
                     if (searchOverlayStillActive) {
                         floatingOverlayManager.showOrUpdateSearchLoadingOverlay(
                             title = WatchSessionRepository.targetTaskTitle.value ?: "Video Task",

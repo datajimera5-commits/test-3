@@ -139,20 +139,38 @@ object ApkUpdateInstaller {
 
     /**
      * Determines whether the currently running app is already up-to-date with respect to the remote update.
-     * Prevents false "Mandatory Update" dialogs when user downloads the latest app via referral link.
+     * Guarantees pre-installed apps always receive updates and notifications when a new APK is published or replaced,
+     * while preventing duplicate prompts if the update was already installed.
      */
     fun isAppAlreadyUpToDate(
         context: Context,
         updateInfo: AppUpdateInfo,
         installedSignature: String = ""
     ): Boolean {
-        if (!updateInfo.hasUpdate) return true
+        if (!updateInfo.hasUpdate || updateInfo.signature.isBlank()) return true
+
+        // 1. If this exact signature was already installed and recorded on this device
         if (installedSignature.isNotBlank() && installedSignature == updateInfo.signature) {
             return true
         }
 
+        // 2. If an in-app update installation completed successfully for this signature
         if (didAppUpdateComplete(context, updateInfo)) {
             return true
+        }
+
+        // 3. For a completely fresh first install where no signature has ever been recorded:
+        // If the app was installed after the remote update timestamp (+ 1 minute buffer), it's already running the new APK.
+        if (installedSignature.isBlank()) {
+            try {
+                val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                val firstInstall = pkgInfo.firstInstallTime
+                if (updateInfo.updatedAtMillis in 1_000_000_000_000L..Long.MAX_VALUE) {
+                    if (firstInstall > (updateInfo.updatedAtMillis + 60_000L)) {
+                        return true
+                    }
+                }
+            } catch (_: Exception) {}
         }
 
         return false

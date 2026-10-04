@@ -133,6 +133,9 @@ class FloatingTimerOverlayManager(private val context: Context) {
     @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
     fun showOverlay() {
         runOnMain {
+            // Dismiss the "Opening..." search loading overlay immediately as soon as playback starts!
+            hideSearchLoadingOverlay()
+
             if (WatchSessionRepository.sessionState.value != com.example.data.SessionState.ACTIVE ||
                 WatchSessionRepository.isAppInForeground
             ) {
@@ -445,14 +448,19 @@ class FloatingTimerOverlayManager(private val context: Context) {
             root.addView(pillLayout)
             root.addView(celebrationBox)
 
-            // Smooth Dragging Listener from ANYWHERE on the HUD card
+            // Smooth Free-Floating Dragging Listener from anywhere on the floating HUD
             var initialX = 0
             var initialY = 0
             var initialTouchX = 0f
             var initialTouchY = 0f
             var hasMoved = false
 
-            pillLayout.setOnTouchListener { _, event ->
+            root.isClickable = true
+            root.isFocusable = false
+            val screenWidth = context.resources.displayMetrics.widthPixels.coerceAtLeast(400)
+            val screenHeight = context.resources.displayMetrics.heightPixels.coerceAtLeast(800)
+
+            root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
                         initialX = params.x
@@ -465,11 +473,11 @@ class FloatingTimerOverlayManager(private val context: Context) {
                     MotionEvent.ACTION_MOVE -> {
                         val deltaX = (event.rawX - initialTouchX).toInt()
                         val deltaY = (event.rawY - initialTouchY).toInt()
-                        if ( kotlin.math.abs(deltaX) > (5 * density) || kotlin.math.abs(deltaY) > (5 * density)) {
+                        if (kotlin.math.abs(deltaX) > (4 * density) || kotlin.math.abs(deltaY) > (4 * density)) {
                             hasMoved = true
                         }
-                        params.x = (initialX + deltaX).coerceAtLeast(0)
-                        params.y = (initialY + deltaY).coerceAtLeast(24)
+                        params.x = (initialX + deltaX).coerceIn(0, (screenWidth - 80 * density).toInt())
+                        params.y = (initialY + deltaY).coerceIn(20, (screenHeight - 80 * density).toInt())
                         try {
                             windowManager.updateViewLayout(root, params)
                         } catch (_: Exception) {}
@@ -477,7 +485,6 @@ class FloatingTimerOverlayManager(private val context: Context) {
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!hasMoved) {
-                            // Subtle hint on tap
                             if (!isTaskLiked) {
                                 triggerCelebration("👍 Like & 💬 Comment on video for +5c bonus!")
                             }
@@ -549,93 +556,6 @@ class FloatingTimerOverlayManager(private val context: Context) {
 
             // Lock the suggested videos section below the comments so it cannot be clicked or scrolled
             showSuggestedVideosLockOverlay()
-
-            // Lock the video player area at top to prevent dragging down or minimizing the video
-            showPlayerDragLockOverlay()
-        }
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun showPlayerDragLockOverlay() {
-        if (!Settings.canDrawOverlays(context)) return
-
-        playerLockRootView?.let { prev ->
-            try { windowManager.removeView(prev) } catch (_: Exception) {}
-            globalAttachedViews.remove(prev)
-        }
-        playerLockRootView = null
-
-        val screenWidth = context.resources.displayMetrics.widthPixels.coerceAtLeast(400)
-        val density = context.resources.displayMetrics.density
-        val statusBarHeight = (32 * density).toInt()
-        val playerHeightPx = statusBarHeight + ((screenWidth * 9) / 16).coerceAtLeast((220 * density).toInt())
-
-        val playerParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            playerHeightPx,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        }
-
-        var startX = 0f
-        var startY = 0f
-        var isDragging = false
-        val touchSlop = (12 * density)
-
-        val root = FrameLayout(context).apply {
-            setOnTouchListener { _, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        startX = event.rawX
-                        startY = event.rawY
-                        isDragging = false
-                        false
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = Math.abs(event.rawX - startX)
-                        val dy = Math.abs(event.rawY - startY)
-                        if (dy > touchSlop || dx > touchSlop) {
-                            if (!isDragging) {
-                                isDragging = true
-                                try {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "🔒 Video player locked! (Minimizing / drag down disabled during task)",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                } catch (_: Exception) {}
-                            }
-                            true // Intercept & consume drag gesture completely
-                        } else {
-                            false
-                        }
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        val wasDragging = isDragging
-                        isDragging = false
-                        wasDragging
-                    }
-                    else -> false
-                }
-            }
-        }
-
-        try {
-            windowManager.addView(root, playerParams)
-            globalAttachedViews.add(root)
-            playerLockRootView = root
-            WatchSessionRepository.addLog("Player drag-down freeze lock active!", LogType.SUCCESS)
-        } catch (_: Exception) {
-            playerLockRootView = null
         }
     }
 
@@ -649,10 +569,9 @@ class FloatingTimerOverlayManager(private val context: Context) {
         }
         suggestedLockRootView = null
 
-        val screenHeight = context.resources.displayMetrics.heightPixels.coerceAtLeast(800)
         val density = context.resources.displayMetrics.density
-        // Suggested videos section occupies the bottom ~54% of the screen under comments and actions
-        val lockHeightPx = (screenHeight * 0.54f).toInt().coerceAtLeast((360 * density).toInt())
+        // Compact height (~155dp) at Gravity.BOTTOM locks the suggested videos feed below comments cleanly without covering comments preview!
+        val lockHeightPx = (155 * density).toInt()
 
         val lockParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -694,32 +613,32 @@ class FloatingTimerOverlayManager(private val context: Context) {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
             setPadding(
-                (18 * density).toInt(),
                 (14 * density).toInt(),
-                (18 * density).toInt(),
-                (14 * density).toInt()
+                (8 * density).toInt(),
+                (14 * density).toInt(),
+                (8 * density).toInt()
             )
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(
-                    Color.parseColor("#FB0A0F1E"), // Deep Obsidian with top gold border
+                    Color.parseColor("#FA0A0F1E"), // Deep Obsidian with gold border
                     Color.parseColor("#FC060810")
                 )
             ).apply {
                 cornerRadii = floatArrayOf(
-                    22 * density, 22 * density, // top-left
-                    22 * density, 22 * density, // top-right
+                    18 * density, 18 * density, // top-left
+                    18 * density, 18 * density, // top-right
                     0f, 0f, 0f, 0f
                 )
-                setStroke((1.4f * density).toInt(), Color.parseColor("#F59E0B"))
+                setStroke((1.2f * density).toInt(), Color.parseColor("#F59E0B"))
             }
-            elevation = 20 * density
+            elevation = 16 * density
         }
 
         // Notch / Indicator bar
         val notch = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams((38 * density).toInt(), (4 * density).toInt()).apply {
-                bottomMargin = (12 * density).toInt()
+            layoutParams = LinearLayout.LayoutParams((36 * density).toInt(), (3 * density).toInt()).apply {
+                bottomMargin = (6 * density).toInt()
             }
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -737,19 +656,19 @@ class FloatingTimerOverlayManager(private val context: Context) {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = (8 * density).toInt()
+                bottomMargin = (4 * density).toInt()
             }
         }
 
         val lockIconBadge = TextView(context).apply {
             text = "🔒"
-            textSize = 15f
+            textSize = 12f
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
-                (28 * density).toInt(),
-                (28 * density).toInt()
+                (22 * density).toInt(),
+                (22 * density).toInt()
             ).apply {
-                rightMargin = (8 * density).toInt()
+                rightMargin = (6 * density).toInt()
             }
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -762,7 +681,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val headerTitle = TextView(context).apply {
             text = "SUGGESTED VIDEOS LOCKED"
             setTextColor(Color.parseColor("#FBBF24"))
-            textSize = 13f
+            textSize = 11.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(
                 0,
@@ -773,14 +692,14 @@ class FloatingTimerOverlayManager(private val context: Context) {
         headerRow.addView(headerTitle)
 
         val shieldStatusBadge = TextView(context).apply {
-            text = "🛡️ Lock Active"
+            text = "🛡️ Active"
             setTextColor(Color.parseColor("#10B981"))
-            textSize = 10f
+            textSize = 9f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding((8 * density).toInt(), (3 * density).toInt(), (8 * density).toInt(), (3 * density).toInt())
+            setPadding((5 * density).toInt(), (2 * density).toInt(), (5 * density).toInt(), (2 * density).toInt())
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 8 * density
+                cornerRadius = 6 * density
                 setColor(Color.parseColor("#064E3B"))
                 setStroke((0.8f * density).toInt(), Color.parseColor("#10B981"))
             }
@@ -788,30 +707,14 @@ class FloatingTimerOverlayManager(private val context: Context) {
         headerRow.addView(shieldStatusBadge)
         cardLayout.addView(headerRow)
 
-        // Instruction description
-        val descTv = TextView(context).apply {
-            text = "Aapka target video watch task active hai. Niche ke recommended videos par click aur scroll puri tarah lock hai. Upar main video dekhein aur Like & Comment karke coins earn karein."
-            setTextColor(Color.parseColor("#94A3B8"))
-            textSize = 11.5f
-            gravity = Gravity.CENTER
-            setLineSpacing(2 * density, 1f)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = (12 * density).toInt()
-            }
-        }
-        cardLayout.addView(descTv)
-
-        // Target Task & Live Timer Status Card
+        // Target Task & Live Timer Status Card (Compact & crisp)
         val infoCard = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            setPadding((10 * density).toInt(), (6 * density).toInt(), (10 * density).toInt(), (6 * density).toInt())
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 14 * density
+                cornerRadius = 10 * density
                 setColor(Color.parseColor("#111827"))
                 setStroke((1 * density).toInt(), Color.parseColor("#1F2937"))
             }
@@ -825,7 +728,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
             val title = WatchSessionRepository.targetTaskTitle.value ?: "YouTube Video Task"
             text = "🎬 $title"
             setTextColor(Color.WHITE)
-            textSize = 12f
+            textSize = 11f
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -833,7 +736,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = (6 * density).toInt()
+                bottomMargin = (3 * density).toInt()
             }
         }
         infoCard.addView(targetTitleTv)
@@ -850,7 +753,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val timerTv = TextView(context).apply {
             text = "⏱️ 00:00 / 03:00"
             setTextColor(Color.parseColor("#38BDF8"))
-            textSize = 12f
+            textSize = 11f
             typeface = android.graphics.Typeface.MONOSPACE
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
@@ -865,7 +768,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val liveTag = TextView(context).apply {
             text = "🟢 LIVE WATCHING"
             setTextColor(Color.parseColor("#10B981"))
-            textSize = 10f
+            textSize = 9f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         timerRow.addView(liveTag)
@@ -876,10 +779,10 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val progressTrack = FrameLayout(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (3.5f * density).toInt().coerceAtLeast(3)
+                (3 * density).toInt().coerceAtLeast(3)
             ).apply {
-                topMargin = (6 * density).toInt()
-                bottomMargin = (8 * density).toInt()
+                topMargin = (4 * density).toInt()
+                bottomMargin = (5 * density).toInt()
             }
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -913,13 +816,13 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val r1 = TextView(context).apply {
             text = "🪙 3m: +10c"
             setTextColor(Color.parseColor("#F59E0B"))
-            textSize = 9.5f
+            textSize = 8.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                rightMargin = (10 * density).toInt()
+                rightMargin = (8 * density).toInt()
             }
         }
         rewardRow.addView(r1)
@@ -927,13 +830,13 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val r2 = TextView(context).apply {
             text = "👍 Like: +5c"
             setTextColor(Color.parseColor("#FBBF24"))
-            textSize = 9.5f
+            textSize = 8.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                rightMargin = (10 * density).toInt()
+                rightMargin = (8 * density).toInt()
             }
         }
         rewardRow.addView(r2)
@@ -941,7 +844,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
         val r3 = TextView(context).apply {
             text = "💬 Comment: +5c"
             setTextColor(Color.parseColor("#38BDF8"))
-            textSize = 9.5f
+            textSize = 8.5f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         rewardRow.addView(r3)
