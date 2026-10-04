@@ -495,15 +495,28 @@ class FloatingTimerOverlayManager(private val context: Context) {
                 }
             }
 
-            try {
-                windowManager.addView(root, params)
-                globalAttachedViews.add(root)
-                overlayRootView = root
+            val isFullScreenOpeningOverlay = runCatching {
+                val legacy = context.getSharedPreferences("watchearn_prefs", Context.MODE_PRIVATE)
+                legacy.getBoolean("full_screen_opening_overlay", true)
+            }.getOrDefault(true)
+
+            if (!isFullScreenOpeningOverlay) {
+                // When Admin Opening Toggle is OFF -> Show the small top floating timer pill above target video
+                try {
+                    windowManager.addView(root, params)
+                    globalAttachedViews.add(root)
+                    overlayRootView = root
+                    isAttached = true
+                    WatchSessionRepository.addLog("Side floating watch pill active on screen!", LogType.SUCCESS)
+                } catch (e: Exception) {
+                    isAttached = false
+                    WatchSessionRepository.addLog("Failed to add floating timer: ${e.message}", LogType.ERROR)
+                }
+            } else {
+                // When Admin Opening Toggle is ON (default) -> Hide top small pill, only keep bottom lock bar active
+                overlayRootView = null
                 isAttached = true
-                WatchSessionRepository.addLog("Side floating watch pill active on screen!", LogType.SUCCESS)
-            } catch (e: Exception) {
-                isAttached = false
-                WatchSessionRepository.addLog("Failed to add floating timer: ${e.message}", LogType.ERROR)
+                WatchSessionRepository.addLog("Overlay mode: Top small timer pill hidden (Opening toggle is ON), bottom lock bar active.", LogType.INFO)
             }
 
             // Hook live auto-detection listeners from accessibility & repository

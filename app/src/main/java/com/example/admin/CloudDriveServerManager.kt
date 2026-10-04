@@ -350,6 +350,7 @@ object CloudDriveServerManager {
                     var remoteConfiguredUpdateUrl: String? = null
                     var remoteConfiguredAppDownloadUrl: String? = adminStateObj?.optString("appDownloadUrl", "")?.trim()?.takeIf { it.isNotBlank() }
                     var remoteSharedReferralCode: String? = null
+                    var remoteConfiguredFullScreenOverlay: Boolean? = if (adminStateObj?.has("fullScreenOpeningOverlay") == true) adminStateObj.optBoolean("fullScreenOpeningOverlay") else null
                     if (remotePayoutsArr != null) {
                         val parsedPayouts = mutableListOf<PayoutRequest>()
                         for (i in 0 until remotePayoutsArr.length()) {
@@ -369,6 +370,9 @@ object CloudDriveServerManager {
                                 if (ref.length == 6) {
                                     remoteSharedReferralCode = ref
                                 }
+                            } else if (id == "cfg_full_screen_overlay" || id == DataStoreManager.SYSTEM_CONFIG_FULL_SCREEN_OVERLAY_ID) {
+                                val rawVal = obj.optString("adminNote", "").trim().ifBlank { obj.optString("destination", "").trim() }
+                                remoteConfiguredFullScreenOverlay = rawVal.toBooleanStrictOrNull() ?: true
                             } else if (id.startsWith("chat_")) {
                                 val msgText = obj.optString("adminNote", "")
                                 if (msgText.isNotBlank()) {
@@ -427,6 +431,9 @@ object CloudDriveServerManager {
                         dataStoreManager.saveAppDownloadUrl(
                             DataStoreManager.normalizeAppDownloadUrl(remoteConfiguredAppDownloadUrl!!)
                         )
+                    }
+                    if (remoteConfiguredFullScreenOverlay != null && !isAdminRole) {
+                        dataStoreManager.setFullScreenOpeningOverlayEnabled(remoteConfiguredFullScreenOverlay!!)
                     }
                     if (!remoteSharedReferralCode.isNullOrBlank()) {
                         val existingPending = dataStoreManager.pendingReferralCodeFlow.first()
