@@ -578,7 +578,7 @@ fun MeScreen(
                                             )
                                         }
 
-                                        // Direct Share Button (WhatsApp / System)
+                                        // Direct Share Button (WhatsApp / System) - Link Sharing
                                         Button(
                                             onClick = {
                                                 viewModel.recordSharedReferralCode(myReferralCode)
@@ -586,36 +586,14 @@ fun MeScreen(
                                                 val shareMsg = "👑 *Watch & Earn Real Cash with Kingo King!*\n\n" +
                                                     "🎁 Referral Code Attached: *$myReferralCode*\n" +
                                                     "🎉 Get *+50 Free Bonus Coins* on signup!\n\n" +
-                                                    "📲 Direct 1-Click APK Download (Instant):\n$directDownloadUrl\n\n" +
+                                                    "📲 Direct Download App Link:\n$directDownloadUrl\n\n" +
                                                     "⚡ Already installed Kingo King? Open app directly:\nkingoking://refer?code=$myReferralCode"
-
-                                                val apkFile = java.io.File(context.applicationInfo.sourceDir)
-                                                val sharedApk = java.io.File(context.cacheDir, "KingoKing.apk")
-                                                val apkUri = try {
-                                                    if (apkFile.exists()) {
-                                                        if (!sharedApk.exists() || sharedApk.length() != apkFile.length()) {
-                                                            apkFile.copyTo(sharedApk, overwrite = true)
-                                                        }
-                                                        androidx.core.content.FileProvider.getUriForFile(
-                                                            context,
-                                                            "${context.packageName}.fileprovider",
-                                                            sharedApk
-                                                        )
-                                                    } else null
-                                                } catch (_: Exception) {
-                                                    null
-                                                }
 
                                                 val sendIntent = Intent().apply {
                                                     action = Intent.ACTION_SEND
-                                                    if (apkUri != null) {
-                                                        type = "application/vnd.android.package-archive"
-                                                        putExtra(Intent.EXTRA_STREAM, apkUri)
-                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    } else {
-                                                        type = "text/plain"
-                                                    }
+                                                    type = "text/plain"
                                                     putExtra(Intent.EXTRA_TEXT, shareMsg)
+                                                    putExtra(Intent.EXTRA_SUBJECT, "Kingo King Referral Invitation")
                                                 }
                                                 val shareIntent = Intent.createChooser(sendIntent, "Invite Friends to Kingo King")
                                                 context.startActivity(shareIntent)

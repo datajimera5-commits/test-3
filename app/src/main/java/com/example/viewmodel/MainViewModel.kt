@@ -452,9 +452,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private val _showGlobalSupportChat = MutableStateFlow(false)
+    val showGlobalSupportChat: StateFlow<Boolean> = _showGlobalSupportChat.asStateFlow()
+
+    fun openSupportChat() {
+        _showGlobalSupportChat.value = true
+    }
+
+    fun dismissSupportChat() {
+        _showGlobalSupportChat.value = false
+    }
+
+    fun navigateTo(screen: AppScreen) {
+        if (_currentScreen.value != screen) {
+            screenBackStack.add(_currentScreen.value)
+            _currentScreen.value = screen
+        }
+    }
+
+    fun navigateBack(): Boolean {
+        if (screenBackStack.isNotEmpty()) {
+            _currentScreen.value = screenBackStack.removeAt(screenBackStack.lastIndex)
+            return true
+        }
+        if (_currentScreen.value != AppScreen.HOME) {
+            _currentScreen.value = AppScreen.HOME
+            return true
+        }
+        return false
+    }
+
     fun switchTab(screen: AppScreen) {
         screenBackStack.clear()
         _currentScreen.value = screen
+    }
+
+    fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val targetScreen = intent.getStringExtra("target_screen")?.trim()?.lowercase() ?: ""
+        val targetItemId = intent.getStringExtra("target_item_id")?.trim() ?: ""
+        when (targetScreen) {
+            "tasks" -> {
+                switchTab(AppScreen.TASKS)
+                if (targetItemId.isNotBlank()) {
+                    viewModelScope.launch {
+                        val matchingTask = videoTasks.value.find { it.id == targetItemId }
+                            ?: dataStoreManager.videoTasksFlow.first().find { it.id == targetItemId }
+                        if (matchingTask != null) {
+                            selectTask(matchingTask)
+                        }
+                    }
+                }
+            }
+            "wallet" -> {
+                switchTab(AppScreen.WALLET)
+            }
+            "me" -> {
+                switchTab(AppScreen.ME)
+            }
+            "chat" -> {
+                openSupportChat()
+            }
+            "home" -> {
+                switchTab(AppScreen.HOME)
+            }
+            else -> {
+                if (targetScreen.isNotBlank()) {
+                    switchTab(AppScreen.HOME)
+                }
+            }
+        }
     }
 
     fun selectTask(task: VideoTaskItem) {
@@ -549,21 +616,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rewardCoins = tier.coins,
             taskId = task.id
         )
-    }
-
-    fun navigateTo(screen: AppScreen) {
-        if (_currentScreen.value != screen) {
-            screenBackStack.add(_currentScreen.value)
-            _currentScreen.value = screen
-        }
-    }
-
-    fun navigateBack(): Boolean {
-        if (screenBackStack.isNotEmpty()) {
-            _currentScreen.value = screenBackStack.removeAt(screenBackStack.lastIndex)
-            return true
-        }
-        return false
     }
 
     fun fetchOEmbed(targetUrl: String? = null) {

@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -33,6 +34,7 @@ import com.example.service.NotificationChannels
 import com.example.ui.components.AppBottomNavBar
 import com.example.ui.components.NoInternetDialog
 import com.example.ui.components.SuccessDialog
+import com.example.ui.components.SupportChatDialog
 import com.example.ui.components.TaskIncompleteDialog
 import com.example.ui.components.isInternetAvailable
 import com.example.ui.screens.AdminDashboardScreen
@@ -51,8 +53,11 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
+    private val currentIntentState = mutableStateOf<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        currentIntentState.value = intent
         enableEdgeToEdge()
         NotificationChannels.createChannels(this)
 
@@ -72,13 +77,19 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val viewModel: MainViewModel = viewModel()
                     val context = LocalContext.current
-                    LaunchedEffect(intent?.data) {
-                        val refParam = intent?.data?.getQueryParameter("ref")?.trim()
-                            ?: intent?.data?.getQueryParameter("code")?.trim() ?: ""
-                        if (refParam.length == 6 && refParam.all { it.isDigit() }) {
-                            viewModel.savePendingReferralCode(refParam)
-                        } else {
-                            viewModel.scanForPendingReferralCode(context)
+                    val activeIntent by currentIntentState
+
+                    LaunchedEffect(activeIntent) {
+                        val currIntent = activeIntent
+                        if (currIntent != null) {
+                            val refParam = currIntent.data?.getQueryParameter("ref")?.trim()
+                                ?: currIntent.data?.getQueryParameter("code")?.trim() ?: ""
+                            if (refParam.length == 6 && refParam.all { it.isDigit() }) {
+                                viewModel.savePendingReferralCode(refParam)
+                            } else {
+                                viewModel.scanForPendingReferralCode(context)
+                            }
+                            viewModel.handleIncomingIntent(currIntent)
                         }
                     }
                     var isOnline by remember { mutableStateOf(isInternetAvailable(context)) }
@@ -163,6 +174,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        currentIntentState.value = intent
+    }
+
     override fun onResume() {
         super.onResume()
         com.example.repository.WatchSessionRepository.setAppInForeground(true)
@@ -182,6 +199,7 @@ fun WatchEarnApp(
     val currentUser by viewModel.currentUser.collectAsState()
     val currentScreen by viewModel.currentScreen.collectAsState()
     val showSuccessDialog by viewModel.showSuccessDialog.collectAsState()
+    val showGlobalSupportChat by viewModel.showGlobalSupportChat.collectAsState()
     val activeRewardCoins by viewModel.activeRewardCoins.collectAsState()
     val videoTasks by viewModel.videoTasks.collectAsState()
     val taskIncompleteMessage by viewModel.taskIncompleteMessage.collectAsState()
@@ -287,6 +305,16 @@ fun WatchEarnApp(
         SuccessDialog(
             rewardCoins = activeRewardCoins,
             onDismiss = { viewModel.dismissSuccessDialog() }
+        )
+    }
+
+    if (showGlobalSupportChat) {
+        val supportMessages by viewModel.supportMessages.collectAsState()
+        SupportChatDialog(
+            currentUser = currentUser,
+            allMessages = supportMessages,
+            onSendMessage = { msg -> viewModel.sendSupportMessage(msg) },
+            onDismiss = { viewModel.dismissSupportChat() }
         )
     }
 

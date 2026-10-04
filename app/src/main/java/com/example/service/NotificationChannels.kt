@@ -109,6 +109,8 @@ object NotificationChannels {
         title: String,
         body: String,
         dedupKey: String? = null,
+        targetScreen: String = "home",
+        targetItemId: String? = null,
         allowOnAdminApp: Boolean = false,
         notificationId: Int = ((dedupKey?.hashCode()?.let { Math.abs(it) } ?: (System.currentTimeMillis() % 100000).toInt()) % 80000) + 2000
     ) {
@@ -125,7 +127,11 @@ object NotificationChannels {
                 ?: return
 
             val openIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("target_screen", targetScreen)
+                if (!targetItemId.isNullOrBlank()) {
+                    putExtra("target_item_id", targetItemId)
+                }
             }
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -187,7 +193,9 @@ object NotificationChannels {
                                 context = context,
                                 title = "🎬 New Video Task (+${t.rewardCoins} Coins)",
                                 body = t.title,
-                                dedupKey = taskKey
+                                dedupKey = taskKey,
+                                targetScreen = "tasks",
+                                targetItemId = t.id
                             )
                         } else if (t.isPinned && t.pinnedAt > 1700000000000L) {
                             val pinKey = "task_pin_${t.id}_${t.pinnedAt}"
@@ -197,7 +205,9 @@ object NotificationChannels {
                                     context = context,
                                     title = "⭐ Featured Task (+${t.rewardCoins} Coins)",
                                     body = t.title,
-                                    dedupKey = pinKey
+                                    dedupKey = pinKey,
+                                    targetScreen = "tasks",
+                                    targetItemId = t.id
                                 )
                             }
                         }
@@ -209,14 +219,25 @@ object NotificationChannels {
                     for (p in posts) {
                         if (defaultPostIds.contains(p.id)) continue
                         val postKey = "post_${p.id}"
+                        val targetTab = when (p.targetTab.trim().uppercase()) {
+                            "TASKS" -> "tasks"
+                            "WALLET" -> "wallet"
+                            "ME" -> "me"
+                            else -> "home"
+                        }
+                        val postNotificationTitle = if (p.title.isNotBlank()) p.title else "📢 New Update"
+                        val postNotificationBody = if (p.message.isNotBlank()) p.message else "Tap to view in the app."
+
                         if (!notified.contains(postKey) && !notified.contains(p.id) && !inMemoryDispatchedKeys.contains(postKey) && !inMemoryDispatchedKeys.contains(p.id)) {
                             newlyNotifiedKeys.add(postKey)
                             newlyNotifiedKeys.add(p.id)
                             sendAdminUpdateNotification(
                                 context = context,
-                                title = p.title.ifBlank { "🔔 New Update" },
-                                body = p.message.ifBlank { "Tap to open the app." },
-                                dedupKey = postKey
+                                title = postNotificationTitle,
+                                body = postNotificationBody,
+                                dedupKey = postKey,
+                                targetScreen = targetTab,
+                                targetItemId = p.id
                             )
                         } else if (p.isPinned && p.pinnedAt > 1700000000000L) {
                             val pinKey = "post_pin_${p.id}_${p.pinnedAt}"
@@ -224,9 +245,11 @@ object NotificationChannels {
                                 newlyNotifiedKeys.add(pinKey)
                                 sendAdminUpdateNotification(
                                     context = context,
-                                    title = p.title.ifBlank { "📢 Featured Update" },
-                                    body = p.message.ifBlank { "Tap to view details." },
-                                    dedupKey = pinKey
+                                    title = if (p.title.isNotBlank()) "📢 ${p.title}" else "📢 Featured Update",
+                                    body = postNotificationBody,
+                                    dedupKey = pinKey,
+                                    targetScreen = targetTab,
+                                    targetItemId = p.id
                                 )
                             }
                         }
@@ -251,7 +274,9 @@ object NotificationChannels {
                                             context = context,
                                             title = "✅ Withdrawal Approved (₹$inrStr)",
                                             body = "Your ₹$inrStr payout via ${req.method} is approved and processing.",
-                                            dedupKey = statusNotifyKey
+                                            dedupKey = statusNotifyKey,
+                                            targetScreen = "wallet",
+                                            targetItemId = req.id
                                         )
                                     }
                                     PayoutStatus.COMPLETED -> {
@@ -259,7 +284,9 @@ object NotificationChannels {
                                             context = context,
                                             title = "🎉 Payment Sent! ₹$inrStr",
                                             body = "₹$inrStr ($safeCoins Coins) has been sent to ${req.method} (${req.destination}).",
-                                            dedupKey = statusNotifyKey
+                                            dedupKey = statusNotifyKey,
+                                            targetScreen = "wallet",
+                                            targetItemId = req.id
                                         )
                                     }
                                     PayoutStatus.REJECTED -> {
@@ -267,7 +294,9 @@ object NotificationChannels {
                                             context = context,
                                             title = "❌ Withdrawal Refunded (+$safeCoins Coins)",
                                             body = "$safeCoins Coins have been returned to your wallet.",
-                                            dedupKey = statusNotifyKey
+                                            dedupKey = statusNotifyKey,
+                                            targetScreen = "wallet",
+                                            targetItemId = req.id
                                         )
                                     }
                                     else -> {}
@@ -291,14 +320,18 @@ object NotificationChannels {
                                     context = context,
                                     title = "🤝 Referral Bonus ($sign Coins)",
                                     body = tx.title,
-                                    dedupKey = txKey
+                                    dedupKey = txKey,
+                                    targetScreen = "wallet",
+                                    targetItemId = tx.id
                                 )
                             } else {
                                 sendAdminUpdateNotification(
                                     context = context,
                                     title = "🪙 Wallet Updated ($sign Coins)",
                                     body = "Your wallet balance has been updated.",
-                                    dedupKey = txKey
+                                    dedupKey = txKey,
+                                    targetScreen = "wallet",
+                                    targetItemId = tx.id
                                 )
                             }
                         }
@@ -318,7 +351,8 @@ object NotificationChannels {
                                 context = context,
                                 title = "🚀 App Update Available",
                                 body = "Tap to download the latest update.",
-                                dedupKey = updKey
+                                dedupKey = updKey,
+                                targetScreen = "home"
                             )
                         }
                     }
@@ -345,6 +379,7 @@ object NotificationChannels {
                             title = "💬 Support Query from ${latest.userName} (${latest.userId})",
                             body = latest.message,
                             dedupKey = "msg_${latest.id}",
+                            targetScreen = "chat",
                             allowOnAdminApp = true
                         )
                     }
@@ -370,9 +405,11 @@ object NotificationChannels {
                         val latest = newReplies.last()
                         sendAdminUpdateNotification(
                             context = context,
-                            title = "💬 Support Reply",
+                            title = "💬 Support Reply from Kingo Admin",
                             body = latest.message,
-                            dedupKey = "msg_${latest.id}"
+                            dedupKey = "msg_${latest.id}",
+                            targetScreen = "chat",
+                            targetItemId = latest.id
                         )
                     }
                 }
