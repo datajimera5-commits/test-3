@@ -132,6 +132,15 @@ object WatchSessionRepository {
     var onPlaybackStateUpdated: ((isPlaying: Boolean) -> Unit)? = null
     var onCommentSheetVisibilityChanged: ((isOpen: Boolean) -> Unit)? = null
 
+    @Volatile
+    var isCommentSheetOpen: Boolean = false
+        private set
+
+    fun setCommentSheetOpen(isOpen: Boolean) {
+        isCommentSheetOpen = isOpen
+        onCommentSheetVisibilityChanged?.invoke(isOpen)
+    }
+
     fun triggerTaskIncomplete(reason: String) {
         val currentState = _sessionState.value
         if (currentState != SessionState.ACTIVE && currentState != SessionState.WAITING) {

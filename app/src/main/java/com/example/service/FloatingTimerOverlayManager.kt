@@ -514,6 +514,9 @@ class FloatingTimerOverlayManager(private val context: Context) {
             WatchSessionRepository.onTaskCommentDetected = {
                 handleCommentDetected()
             }
+            WatchSessionRepository.onCommentSheetVisibilityChanged = { isOpen ->
+                runOnMain { setSuggestedLockVisible(!isOpen) }
+            }
             WatchSessionRepository.onRequestHideOverlay = {
                 hideOverlay()
             }
@@ -858,6 +861,9 @@ class FloatingTimerOverlayManager(private val context: Context) {
         root.addView(cardLayout)
 
         try {
+            if (WatchSessionRepository.isCommentSheetOpen) {
+                root.visibility = View.GONE
+            }
             windowManager.addView(root, lockParams)
             globalAttachedViews.add(root)
             suggestedLockRootView = root

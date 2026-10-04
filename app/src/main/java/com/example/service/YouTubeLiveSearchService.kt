@@ -640,27 +640,38 @@ class YouTubeLiveSearchService : AccessibilityService() {
                     combined.contains("जवाब जोड़ें") ||
                     desc.equals("Comments", ignoreCase = true) ||
                     text.equals("Comments", ignoreCase = true) ||
-                    desc.equals("Close comments", ignoreCase = true) ||
-                    desc.equals("Close", ignoreCase = true) ||
                     viewId.contains("comment_composer", ignoreCase = true) ||
                     viewId.contains("comment_box", ignoreCase = true)
                 )) {
                     wasCommentComposerOpen = true
                     lastCommentComposerOpenTime = System.currentTimeMillis()
                     lastCommentClickTime = System.currentTimeMillis()
+                    updateCommentSheetState(true)
                 }
 
-                // Track if user clicked Cancel / Close / Discard on a comment draft
-                if (desc.equals("Cancel", ignoreCase = true) ||
+                // Track if user clicked Close comments / Cancel / Discard
+                if (desc.equals("Close comments", ignoreCase = true) ||
+                    desc.equals("Close", ignoreCase = true) ||
+                    desc.equals("Close live chat", ignoreCase = true) ||
+                    desc.equals("Cancel", ignoreCase = true) ||
                     desc.equals("Discard", ignoreCase = true) ||
                     text.equals("Cancel", ignoreCase = true) ||
                     text.equals("Discard", ignoreCase = true) ||
+                    desc.contains("टिप्पणी बंद करें") ||
                     desc.contains("रद्द करें") ||
                     text.contains("रद्द करें")
                 ) {
                     lastCommentCancelClickTime = System.currentTimeMillis()
                     hasTypedCommentText = false
                     wasCommentEditTextActive = false
+                    wasCommentComposerOpen = false
+                    val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+                    mainHandler.postDelayed({
+                        val root = getYouTubeRootNode() ?: rootInActiveWindow
+                        val entries = mutableListOf<UiNodeEntry>()
+                        collectScreenNodes(root, entries)
+                        updateCommentSheetState(isCommentsSheetOrKeyboardOpen(entries))
+                    }, 350L)
                 }
 
                 val statusBarHeight = getStatusBarHeight()
@@ -2763,7 +2774,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
     private fun updateCommentSheetState(isOpen: Boolean) {
         if (lastReportedCommentSheetState != isOpen) {
             lastReportedCommentSheetState = isOpen
-            WatchSessionRepository.onCommentSheetVisibilityChanged?.invoke(isOpen)
+            WatchSessionRepository.setCommentSheetOpen(isOpen)
         }
     }
 
@@ -2771,7 +2782,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
         if (isSoftKeyboardVisible()) return true
         val node = root ?: getYouTubeRootNode() ?: return false
         val now = System.currentTimeMillis()
-        if (wasCommentComposerOpen && (now - lastCommentComposerOpenTime) < 3000L) {
+        if (wasCommentComposerOpen && (now - lastCommentComposerOpenTime) < 5000L) {
             return true
         }
         return checkCommentOrChatNodes(node)
@@ -2783,6 +2794,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
             val vId = node.viewIdResourceName?.lowercase() ?: ""
             val desc = node.contentDescription?.toString()?.lowercase() ?: ""
             val text = node.text?.toString()?.lowercase() ?: ""
+            val comb = "$desc $text $vId"
 
             val isPanelOrSheet = vId.contains("engagement_panel") ||
                     vId.contains("bottom_sheet") ||
@@ -2792,22 +2804,28 @@ class YouTubeLiveSearchService : AccessibilityService() {
                     vId.contains("comment_box") ||
                     vId.contains("reply_composer")
 
-            val isCommentHeaderOrChatHeader = desc.equals("close live chat", ignoreCase = true) ||
+            val isCommentOrChatHeader = desc.equals("close live chat", ignoreCase = true) ||
                     desc.equals("close chat", ignoreCase = true) ||
                     desc.equals("close comments", ignoreCase = true) ||
                     desc.equals("close engagement panel", ignoreCase = true) ||
+                    text.equals("comments", ignoreCase = true) ||
+                    desc.equals("comments", ignoreCase = true) ||
                     text.equals("live chat", ignoreCase = true) ||
                     text.equals("top messages", ignoreCase = true) ||
                     text.equals("chat...", ignoreCase = true) ||
                     text.equals("add a comment...", ignoreCase = true) ||
                     text.equals("add a reply...", ignoreCase = true) ||
+                    comb.contains("community guidelines") ||
+                    comb.contains("remember to keep comments") ||
+                    comb.contains("top") && comb.contains("newest") ||
                     desc.contains("टिप्पणी बंद करें") ||
-                    desc.contains("लाइव चैट बंद करें")
+                    desc.contains("लाइव चैट बंद करें") ||
+                    text.contains("टिप्पणियां")
 
-            if (isPanelOrSheet && isCommentHeaderOrChatHeader) {
+            if (isPanelOrSheet && isCommentOrChatHeader) {
                 return true
             }
-            if (isCommentHeaderOrChatHeader && (desc.contains("close") || desc.contains("बंद"))) {
+            if (isCommentOrChatHeader && (desc.contains("close") || desc.contains("बंद") || text.contains("comments") || desc.contains("comments"))) {
                 return true
             }
         }
@@ -3389,19 +3407,24 @@ class YouTubeLiveSearchService : AccessibilityService() {
             val v = e.viewId.lowercase()
             val d = e.desc.trim().lowercase()
             val t = e.text.trim().lowercase()
+            val comb = "$t $d $v"
 
             (e.isEditable && (v.contains("comment") || v.contains("reply") || v.contains("composer"))) ||
             v.contains("comment_sheet") ||
             v.contains("comment_composer") ||
             v.contains("comment_box") ||
-            (v.contains("engagement_panel") && (t.contains("comment") || d.contains("comment") || t.contains("टिप्पणी"))) ||
-            ((d == "close comments" || d == "टिप्पणियां बंद करें" || d.contains("close comment") || (d == "close" && v.contains("close_button"))) &&
+            (v.contains("engagement_panel") && (comb.contains("comment") || comb.contains("टिप्पणी") || comb.contains("chat"))) ||
+            (e.rect.top in (screenHeight * 0.15f).toInt()..(screenHeight * 0.58f).toInt() && (
+                t == "comments" || d == "comments" || t == "टिप्पणियां" || d == "टिप्पणियां" ||
+                t.contains("community guidelines") || comb.contains("respectful by following") ||
+                comb.contains("top messages") || comb.contains("live chat")
+            )) ||
+            ((d == "close comments" || d == "टिप्पणियां बंद करें" || d.contains("close comment") || (d == "close" && v.contains("close_button")) || d == "close live chat") &&
              e.rect.top in (screenHeight * 0.15f).toInt()..(screenHeight * 0.95f).toInt()) ||
-            t.contains("add a comment") ||
-            t.contains("add a reply") ||
-            t.contains("टिप्पणी जोड़ें") ||
-            d.contains("add a comment") ||
-            d.contains("add a reply")
+            comb.contains("add a comment") ||
+            comb.contains("add a reply") ||
+            comb.contains("टिप्पणी जोड़ें") ||
+            comb.contains("जवाब जोड़ें")
         }
     }
 
@@ -3467,6 +3490,7 @@ class YouTubeLiveSearchService : AccessibilityService() {
 
             // Check if user is typing comments or comments sheet is open
             val isCommentActive = isCommentsSheetOrKeyboardOpen(entries)
+            updateCommentSheetState(isCommentActive)
             if (!isCommentActive) {
                 wasCommentComposerOpen = false
                 wasCommentEditTextActive = false

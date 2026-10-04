@@ -1001,14 +1001,15 @@ object CloudDriveServerManager {
                                     val timeMillis = try {
                                         java.time.Instant.parse(aUpdated).toEpochMilli()
                                     } catch (_: Exception) {
-                                        System.currentTimeMillis()
+                                        0L
                                     }
+                                    val safeTime = if (timeMillis > 1_000_000_000_000L) timeMillis else System.currentTimeMillis()
                                     val syntheticStamp = Math.abs("gh_${aId}_${aUpdated}_${aSize}".hashCode().toLong()).coerceAtLeast(1L)
                                     return AppUpdateInfo(
                                         hasUpdate = true,
                                         fileId = "gh_${aId}",
                                         fileName = "KingoKing_Update",
-                                        updatedAtMillis = if (timeMillis > 0L) timeMillis else syntheticStamp,
+                                        updatedAtMillis = safeTime,
                                         fileSize = aSize,
                                         downloadUrl = aDownloadUrl
                                     )
@@ -1042,12 +1043,13 @@ object CloudDriveServerManager {
                     } catch (_: Exception) { 0L }
                 } else 0L
 
+                val safeTime = if (timeMillis > 1_000_000_000_000L) timeMillis else System.currentTimeMillis()
                 val syntheticStamp = Math.abs("${directDownloadUrl}_${etag}_${clen}_${lastMod}".hashCode().toLong()).coerceAtLeast(1L)
                 return AppUpdateInfo(
                     hasUpdate = true,
                     fileId = "gh_${syntheticStamp}",
                     fileName = "KingoKing_Update",
-                    updatedAtMillis = if (timeMillis > 0L) timeMillis else syntheticStamp,
+                    updatedAtMillis = safeTime,
                     fileSize = clen,
                     downloadUrl = directDownloadUrl
                 )
@@ -1057,7 +1059,7 @@ object CloudDriveServerManager {
                 hasUpdate = true,
                 fileId = "gh_${Math.abs(directDownloadUrl.hashCode())}",
                 fileName = "KingoKing_Update",
-                updatedAtMillis = Math.abs(directDownloadUrl.hashCode().toLong()).coerceAtLeast(1L),
+                updatedAtMillis = System.currentTimeMillis(),
                 fileSize = 0L,
                 downloadUrl = directDownloadUrl
             )
