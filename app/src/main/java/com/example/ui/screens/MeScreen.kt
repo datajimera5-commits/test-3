@@ -586,8 +586,7 @@ fun MeScreen(
                                                 val shareMsg = "👑 *Watch & Earn Real Cash with Kingo King!*\n\n" +
                                                     "🎁 Referral Code Attached: *$myReferralCode*\n" +
                                                     "🎉 Get *+50 Free Bonus Coins* on signup!\n\n" +
-                                                    "📲 Direct Download App Link:\n$directDownloadUrl\n\n" +
-                                                    "⚡ Already installed Kingo King? Open app directly:\nkingoking://refer?code=$myReferralCode"
+                                                    "📲 Direct Download App Link:\n$directDownloadUrl"
 
                                                 val sendIntent = Intent().apply {
                                                     action = Intent.ACTION_SEND

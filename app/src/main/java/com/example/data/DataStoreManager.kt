@@ -76,10 +76,10 @@ class DataStoreManager(private val context: Context) {
         const val SYSTEM_CONFIG_FULL_SCREEN_OVERLAY_ID = "__system_config_full_screen_overlay__"
 
         const val DEFAULT_APP_DOWNLOAD_URL =
-            "https://drive.google.com/file/d/18AscXnESO7CMnRcEo8xKKKT-LJl7JkFK/view?usp=sharing"
+            "https://github.com/datajimera2-web/Kingo-King-App/releases/download/v1/kingoking.apk"
 
         /**
-         * Normalizes any raw or malformed app download link (such as "drive : //file/d/<ID>/view?usp=sharing%20%20ye%20link%20hai")
+         * Normalizes any raw or malformed app download link (such as GitHub releases or Google Drive)
          * into a clean, clickable https:// URL. Falls back to DEFAULT_APP_DOWNLOAD_URL when blank.
          */
         fun normalizeAppDownloadUrl(raw: String?): String {
@@ -91,7 +91,35 @@ class DataStoreManager(private val context: Context) {
             }
             decoded = decoded.replace("%20", " ").trim()
 
-            // 1. Check if a Google Drive file ID is present anywhere in the string (e.g., /file/d/<ID>, /d/<ID>, or id=<ID>)
+            // 1. GitHub Releases URLs
+            if (decoded.contains("github.com", ignoreCase = true)) {
+                val tagRegex = Regex("""github\.com/([^/]+)/([^/]+)/releases/tag/([^/\s#?]+)""", RegexOption.IGNORE_CASE)
+                val tagMatch = tagRegex.find(decoded)
+                if (tagMatch != null) {
+                    val owner = tagMatch.groupValues[1]
+                    val repo = tagMatch.groupValues[2]
+                    val tag = tagMatch.groupValues[3]
+                    return "https://github.com/$owner/$repo/releases/download/$tag/kingoking.apk"
+                }
+                val directDownloadRegex = Regex("""github\.com/([^/]+)/([^/]+)/releases/download/([^/\s#?]+)/([^\s#?]+)""", RegexOption.IGNORE_CASE)
+                val directMatch = directDownloadRegex.find(decoded)
+                if (directMatch != null) {
+                    val owner = directMatch.groupValues[1]
+                    val repo = directMatch.groupValues[2]
+                    val tag = directMatch.groupValues[3]
+                    val file = directMatch.groupValues[4]
+                    return "https://github.com/$owner/$repo/releases/download/$tag/$file"
+                }
+                val repoRegex = Regex("""github\.com/([^/]+)/([^/\s#?]+)""", RegexOption.IGNORE_CASE)
+                val repoMatch = repoRegex.find(decoded)
+                if (repoMatch != null) {
+                    val owner = repoMatch.groupValues[1]
+                    val repo = repoMatch.groupValues[2]
+                    return "https://github.com/$owner/$repo/releases/latest/download/kingoking.apk"
+                }
+            }
+
+            // 2. Check if a Google Drive file ID is present anywhere in the string (e.g., /file/d/<ID>, /d/<ID>, or id=<ID>)
             val driveFileIdRegex = Regex("""(?:/file/d/|/d/|[?&]id=)([a-zA-Z0-9_-]{18,60})""")
             val driveMatch = driveFileIdRegex.find(decoded)
             if (driveMatch != null) {
@@ -99,19 +127,19 @@ class DataStoreManager(private val context: Context) {
                 return "https://drive.google.com/file/d/$fileId/view?usp=sharing"
             }
 
-            // 2. Check if the user pasted a bare Google Drive file ID
+            // 3. Check if the user pasted a bare Google Drive file ID
             val firstToken = decoded.split(Regex("\\s+")).firstOrNull()?.trim() ?: ""
             if (firstToken.matches(Regex("^[a-zA-Z0-9_-]{24,50}$")) && !firstToken.contains(".")) {
                 return "https://drive.google.com/file/d/$firstToken/view?usp=sharing"
             }
 
-            // 3. Check if an explicit https:// or http:// URL is inside the string
+            // 4. Check if an explicit https:// or http:// URL is inside the string
             val httpMatch = Regex("""https?://[^\s"<>]+""", RegexOption.IGNORE_CASE).find(decoded)
             if (httpMatch != null) {
                 return httpMatch.value.trimEnd('.', ',', ';', ')')
             }
 
-            // 4. Fix broken scheme like "drive : //..." or "drive://..."
+            // 5. Fix broken scheme like "drive : //..." or "drive://..."
             val collapsed = decoded.replace(Regex("""^[a-zA-Z]+\s*:\s*//\s*"""), "")
                 .split(Regex("\\s+"))
                 .firstOrNull()

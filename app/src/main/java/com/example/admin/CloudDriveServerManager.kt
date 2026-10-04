@@ -890,7 +890,15 @@ object CloudDriveServerManager {
             }
         }
 
-        // 2. Check if it's a direct Google Drive File link: /file/d/FILE_ID or id=FILE_ID
+        // 2. Check if it's a GitHub Release / Repo link
+        if (clean.contains("github.com", ignoreCase = true)) {
+            val ghInfo = inspectGitHubReleaseUpdate(clean)
+            if (ghInfo != null) {
+                return ghInfo
+            }
+        }
+
+        // 3. Check if it's a direct Google Drive File link: /file/d/FILE_ID or id=FILE_ID
         val fileRegex = Regex("""(?:/file/d/|id=)([a-zA-Z0-9_-]{15,})""")
         val fileMatch = fileRegex.find(clean)
         if (fileMatch != null) {
@@ -915,20 +923,20 @@ object CloudDriveServerManager {
             return AppUpdateInfo(
                 hasUpdate = true,
                 fileId = fileId,
-                fileName = "KingoKing_Update.apk",
+                fileName = "KingoKing_Update",
                 updatedAtMillis = fileTimestamp,
                 fileSize = 0L,
                 downloadUrl = dlUrl
             )
         }
 
-        // 3. Direct APK HTTP link
+        // 4. Direct APK HTTP link
         if (clean.startsWith("http://") || clean.startsWith("https://")) {
             val syntheticId = "apk_${Math.abs(clean.hashCode())}"
             return AppUpdateInfo(
                 hasUpdate = true,
                 fileId = syntheticId,
-                fileName = clean.substringAfterLast("/").substringBefore("?").ifBlank { "KingoKing_Update.apk" },
+                fileName = "KingoKing_Update",
                 updatedAtMillis = Math.abs(clean.hashCode().toLong()).coerceAtLeast(1L),
                 fileSize = 0L,
                 downloadUrl = clean
@@ -936,6 +944,108 @@ object CloudDriveServerManager {
         }
 
         return null
+    }
+
+    private fun inspectGitHubReleaseUpdate(rawGithubUrl: String): AppUpdateInfo? {
+        try {
+            // Extract owner and repo: github.com/{owner}/{repo}
+            val match = Regex("""github\.com/([^/]+)/([^/\s#?]+)""", RegexOption.IGNORE_CASE).find(rawGithubUrl)
+                ?: return null
+            val owner = match.groupValues[1]
+            val repo = match.groupValues[2].removeSuffix(".git")
+
+            // 1. Try GitHub Releases API
+            val apiUrl = "https://api.github.com/repos/$owner/$repo/releases"
+            try {
+                val req = Request.Builder()
+                    .url(apiUrl)
+                    .header("User-Agent", USER_AGENT)
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .get()
+                    .build()
+                val res = httpClient.newCall(req).execute()
+                if (res.isSuccessful) {
+                    val body = res.body?.string() ?: ""
+                    res.close()
+                    val array = JSONArray(body)
+                    if (array.length() > 0) {
+                        for (i in 0 until array.length()) {
+                            val releaseObj = array.getJSONObject(i)
+                            val assets = releaseObj.optJSONArray("assets") ?: JSONArray()
+                            for (j in 0 until assets.length()) {
+                                val asset = assets.getJSONObject(j)
+                                val aName = asset.optString("name", "")
+                                val aDownloadUrl = asset.optString("browser_download_url", "")
+                                val aSize = asset.optLong("size", 0L)
+                                val aUpdated = asset.optString("updated_at", "")
+                                val aId = asset.optLong("id", 0L)
+                                if (aName.endsWith(".apk", ignoreCase = true) || aDownloadUrl.endsWith(".apk", ignoreCase = true)) {
+                                    val timeMillis = try {
+                                        java.time.Instant.parse(aUpdated).toEpochMilli()
+                                    } catch (_: Exception) {
+                                        System.currentTimeMillis()
+                                    }
+                                    val syntheticStamp = Math.abs("gh_${aId}_${aUpdated}_${aSize}".hashCode().toLong()).coerceAtLeast(1L)
+                                    return AppUpdateInfo(
+                                        hasUpdate = true,
+                                        fileId = "gh_${aId}",
+                                        fileName = "KingoKing_Update",
+                                        updatedAtMillis = if (timeMillis > 0L) timeMillis else syntheticStamp,
+                                        fileSize = aSize,
+                                        downloadUrl = aDownloadUrl
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    res.close()
+                }
+            } catch (_: Exception) {}
+
+            // 2. Direct HTTP HEAD check on the direct release asset download URL
+            val directDownloadUrl = DataStoreManager.normalizeAppDownloadUrl(rawGithubUrl)
+            try {
+                val headReq = Request.Builder()
+                    .url(directDownloadUrl)
+                    .header("User-Agent", USER_AGENT)
+                    .header("Accept", "*/*")
+                    .get()
+                    .build()
+                val headRes = httpClient.newCall(headReq).execute()
+                val lastMod = headRes.header("Last-Modified")
+                val etag = headRes.header("ETag") ?: ""
+                val clen = headRes.header("Content-Length")?.toLongOrNull() ?: 0L
+                headRes.close()
+
+                val timeMillis = if (!lastMod.isNullOrBlank()) {
+                    try {
+                        java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss z", java.util.Locale.US).parse(lastMod)?.time ?: 0L
+                    } catch (_: Exception) { 0L }
+                } else 0L
+
+                val syntheticStamp = Math.abs("${directDownloadUrl}_${etag}_${clen}_${lastMod}".hashCode().toLong()).coerceAtLeast(1L)
+                return AppUpdateInfo(
+                    hasUpdate = true,
+                    fileId = "gh_${syntheticStamp}",
+                    fileName = "KingoKing_Update",
+                    updatedAtMillis = if (timeMillis > 0L) timeMillis else syntheticStamp,
+                    fileSize = clen,
+                    downloadUrl = directDownloadUrl
+                )
+            } catch (_: Exception) {}
+
+            return AppUpdateInfo(
+                hasUpdate = true,
+                fileId = "gh_${Math.abs(directDownloadUrl.hashCode())}",
+                fileName = "KingoKing_Update",
+                updatedAtMillis = Math.abs(directDownloadUrl.hashCode().toLong()).coerceAtLeast(1L),
+                fileSize = 0L,
+                downloadUrl = directDownloadUrl
+            )
+        } catch (_: Exception) {
+            return null
+        }
     }
 
     /**

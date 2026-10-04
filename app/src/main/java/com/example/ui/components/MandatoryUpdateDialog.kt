@@ -29,10 +29,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -236,35 +238,39 @@ fun MandatoryUpdateDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .widthIn(max = 420.dp)
+                .widthIn(max = 400.dp)
                 .border(
                     width = 1.5.dp,
                     brush = Brush.linearGradient(
-                        colors = listOf(AmberGold, EmeraldGreen.copy(alpha = 0.7f))
+                        colors = listOf(
+                            AmberGold,
+                            Color(0xFFFBBF24).copy(alpha = 0.5f),
+                            AmberGold.copy(alpha = 0.8f)
+                        )
                     ),
-                    shape = RoundedCornerShape(24.dp)
+                    shape = RoundedCornerShape(26.dp)
                 )
                 .testTag("mandatory_update_dialog"),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = DarkCard),
-            elevation = CardDefaults.cardElevation(defaultElevation = 14.dp)
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF090E17)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 20.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Top glowing icon
+                // Top Glowing App Icon Badge
                 Box(
                     modifier = Modifier
-                        .size(68.dp)
+                        .size(72.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    AmberGold.copy(alpha = 0.28f),
-                                    AmberGold.copy(alpha = 0.06f)
+                                    AmberGold.copy(alpha = 0.25f),
+                                    AmberGold.copy(alpha = 0.05f)
                                 )
                             )
                         )
@@ -273,94 +279,89 @@ fun MandatoryUpdateDialog(
                 ) {
                     Icon(
                         imageVector = if (downloadedApkFile != null) Icons.Default.SecurityUpdateGood else Icons.Default.SystemUpdate,
-                        contentDescription = "Mandatory App Update",
+                        contentDescription = "App Update",
                         tint = AmberGold,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(36.dp)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Mandatory Pill Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(AmberGold.copy(alpha = 0.16f))
-                        .border(1.dp, AmberGold.copy(alpha = 0.45f), RoundedCornerShape(50))
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                // Update Status Pill
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = AmberGold.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AmberGold.copy(alpha = 0.45f))
                 ) {
                     Text(
-                        text = "MANDATORY UPDATE REQUIRED",
+                        text = "NEW VERSION READY",
                         color = AmberGold,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.8.sp
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Please Update App",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = TextPrimary,
+                    text = "App Update Available",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                    color = Color.White,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "A new version of the app is available. Please update now to replace the old version and continue using the app.",
+                    text = "A new update is available with faster video tracking, new tasks, and improved security. Please update now to continue enjoying Kingo King.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
+                    color = Color(0xFF94A3B8),
+                    fontSize = 12.5.sp,
                     textAlign = TextAlign.Center,
-                    lineHeight = 20.sp
+                    lineHeight = 18.sp
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // File info card
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(DarkSurfaceVariant.copy(alpha = 0.75f))
-                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Clean Feature Highlights Card (No raw APK or filename)
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF111827),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1F2937)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CloudDownload,
-                        contentDescription = null,
-                        tint = EmeraldGreen,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = updateInfo.fileName.ifBlank { "KingoKing_Update.apk" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        UpdateFeatureRow(
+                            icon = "⚡",
+                            title = "Performance & Speed",
+                            description = "Instant YouTube video detection & smooth tracking"
                         )
-                        val sizeText = if (updateInfo.fileSize > 0L) {
-                            String.format(Locale.US, "%.1f MB • Saved to Downloads/KingoKing_Update.apk", updateInfo.fileSize / (1024.0 * 1024.0))
-                        } else {
-                            "Official Google Drive Update Package"
-                        }
-                        Text(
-                            text = sizeText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
+                        HorizontalDivider(color = Color(0xFF1F2937))
+                        UpdateFeatureRow(
+                            icon = "🎁",
+                            title = "New Tasks & Rewards",
+                            description = "More videos available with higher coin earnings"
+                        )
+                        HorizontalDivider(color = Color(0xFF1F2937))
+                        UpdateFeatureRow(
+                            icon = "🛡️",
+                            title = "Security & Stability",
+                            description = "Account protection and bug fixes included"
                         )
                     }
                 }
 
                 if (isDownloading) {
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -380,8 +381,8 @@ fun MandatoryUpdateDialog(
                                 Text(
                                     text = "Downloading Update...",
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = TextPrimary,
-                                    fontWeight = FontWeight.SemiBold
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                             Text(
@@ -400,21 +401,21 @@ fun MandatoryUpdateDialog(
                                 .fillMaxWidth()
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(50)),
-                            color = EmeraldGreen,
-                            trackColor = DarkSurfaceVariant
+                            color = AmberGold,
+                            trackColor = Color(0xFF1E293B)
                         )
 
                         if (downloadedMb > 0f) {
                             Spacer(modifier = Modifier.height(6.dp))
                             val mbStr = if (totalMb > 0f) {
-                                String.format(Locale.US, "%.1f MB / %.1f MB", downloadedMb, totalMb)
+                                String.format(Locale.US, "%.1f MB of %.1f MB", downloadedMb, totalMb)
                             } else {
                                 String.format(Locale.US, "%.1f MB downloaded", downloadedMb)
                             }
                             Text(
                                 text = mbStr,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary
+                                color = Color(0xFF94A3B8)
                             )
                         }
                     }
@@ -447,7 +448,6 @@ fun MandatoryUpdateDialog(
                     }
                 }
 
-                // 1-Tap Clean Replacement Button when an older conflicting APK is installed on the phone
                 val readyApk = downloadedApkFile
                 if (readyApk != null && readyApk.exists() && (showReplaceExistingHelper || compatibilityReport?.requiresUninstallToReplace == true)) {
                     Spacer(modifier = Modifier.height(12.dp))
@@ -477,7 +477,7 @@ fun MandatoryUpdateDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Replace Old App & Install New",
+                            text = "Replace & Install Update",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp
                         )
@@ -486,30 +486,36 @@ fun MandatoryUpdateDialog(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // Action Buttons: Cancel (closes app) & Update (downloads and installs)
+                // Action Buttons: Exit App & Update Now
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedButton(
                         onClick = { closeAppImmediately() },
                         modifier = Modifier
                             .weight(1f)
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("mandatory_update_cancel_button"),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFF1E293B),
+                            contentColor = Color.White
+                        )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Cancel",
+                            text = "Exit",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            fontSize = 13.sp,
+                            color = Color.White
                         )
                     }
 
@@ -518,7 +524,7 @@ fun MandatoryUpdateDialog(
                         enabled = !isDownloading,
                         modifier = Modifier
                             .weight(1.3f)
-                            .height(50.dp)
+                            .height(48.dp)
                             .testTag("mandatory_update_confirm_button"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -531,17 +537,17 @@ fun MandatoryUpdateDialog(
                         Icon(
                             imageVector = Icons.Default.SystemUpdate,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = when {
                                 isDownloading -> "Updating..."
-                                downloadedApkFile != null -> "Install Update"
-                                else -> "Update"
+                                downloadedApkFile != null -> "Install Now"
+                                else -> "Update Now"
                             },
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.5.sp
                         )
                     }
                 }
@@ -549,12 +555,46 @@ fun MandatoryUpdateDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Note: Updating is mandatory. Selecting Cancel will close the app.",
+                    text = "Update is required to access tasks and earn rewards.",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary.copy(alpha = 0.75f),
+                    color = Color(0xFF64748B),
+                    fontSize = 11.sp,
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun UpdateFeatureRow(
+    icon: String,
+    title: String,
+    description: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = icon,
+            fontSize = 16.sp
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                fontSize = 12.sp
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF94A3B8),
+                fontSize = 11.sp
+            )
         }
     }
 }
