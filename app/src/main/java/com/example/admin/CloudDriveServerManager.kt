@@ -350,7 +350,6 @@ object CloudDriveServerManager {
                     var remoteConfiguredUpdateUrl: String? = null
                     var remoteConfiguredAppDownloadUrl: String? = adminStateObj?.optString("appDownloadUrl", "")?.trim()?.takeIf { it.isNotBlank() }
                     var remoteSharedReferralCode: String? = null
-                    var remoteConfiguredFullScreenOverlay: Boolean? = if (adminStateObj?.has("fullScreenOpeningOverlay") == true) adminStateObj.optBoolean("fullScreenOpeningOverlay") else null
                     if (remotePayoutsArr != null) {
                         val parsedPayouts = mutableListOf<PayoutRequest>()
                         for (i in 0 until remotePayoutsArr.length()) {
@@ -370,9 +369,6 @@ object CloudDriveServerManager {
                                 if (ref.length == 6) {
                                     remoteSharedReferralCode = ref
                                 }
-                            } else if (id == "cfg_full_screen_overlay" || id == DataStoreManager.SYSTEM_CONFIG_FULL_SCREEN_OVERLAY_ID) {
-                                val rawVal = obj.optString("adminNote", "").trim().ifBlank { obj.optString("destination", "").trim() }
-                                remoteConfiguredFullScreenOverlay = rawVal.toBooleanStrictOrNull() ?: true
                             } else if (id.startsWith("chat_")) {
                                 val msgText = obj.optString("adminNote", "")
                                 if (msgText.isNotBlank()) {
@@ -432,9 +428,6 @@ object CloudDriveServerManager {
                             DataStoreManager.normalizeAppDownloadUrl(remoteConfiguredAppDownloadUrl!!)
                         )
                     }
-                    if (remoteConfiguredFullScreenOverlay != null && !isAdminRole) {
-                        dataStoreManager.setFullScreenOpeningOverlayEnabled(remoteConfiguredFullScreenOverlay!!)
-                    }
                     if (!remoteSharedReferralCode.isNullOrBlank()) {
                         val existingPending = dataStoreManager.pendingReferralCodeFlow.first()
                         if (existingPending.isBlank()) {
@@ -465,25 +458,21 @@ object CloudDriveServerManager {
                         }
                     }
 
-                    // Fallback & Priority: check configured update folder and appDownloadUrl (GitHub Releases URL)
+                    // Fallback: check configured update folder and appDownloadUrl (GitHub Releases URL)
                     val effectiveFolderUrl = remoteConfiguredUpdateUrl ?: dataStoreManager.updateDriveFolderUrlFlow.first()
-                    val effectiveAppDlUrl = (remoteConfiguredAppDownloadUrl ?: dataStoreManager.appDownloadUrlFlow.first()).ifBlank { DataStoreManager.DEFAULT_APP_DOWNLOAD_URL }
+                    val effectiveAppDlUrl = remoteConfiguredAppDownloadUrl ?: dataStoreManager.appDownloadUrlFlow.first()
 
-                    if (effectiveFolderUrl.isNotBlank()) {
+                    if ((resolvedUpdate == null || !resolvedUpdate.hasUpdate) && effectiveFolderUrl.isNotBlank()) {
                         val folderUpdate = inspectPublicDriveUpdateLink(effectiveFolderUrl)
                         if (folderUpdate != null && folderUpdate.hasUpdate) {
-                            if (resolvedUpdate == null || !resolvedUpdate.hasUpdate || folderUpdate.updatedAtMillis > resolvedUpdate.updatedAtMillis) {
-                                resolvedUpdate = folderUpdate
-                            }
+                            resolvedUpdate = folderUpdate
                         }
                     }
 
-                    if (effectiveAppDlUrl.isNotBlank()) {
+                    if ((resolvedUpdate == null || !resolvedUpdate.hasUpdate) && effectiveAppDlUrl.isNotBlank()) {
                         val dlUpdate = inspectPublicDriveUpdateLink(effectiveAppDlUrl)
                         if (dlUpdate != null && dlUpdate.hasUpdate) {
-                            if (resolvedUpdate == null || !resolvedUpdate.hasUpdate || dlUpdate.updatedAtMillis > resolvedUpdate.updatedAtMillis) {
-                                resolvedUpdate = dlUpdate
-                            }
+                            resolvedUpdate = dlUpdate
                         }
                     }
 

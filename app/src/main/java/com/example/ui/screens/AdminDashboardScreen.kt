@@ -1901,7 +1901,7 @@ private fun GoogleDriveServerTabContent(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "ON: Target video par upper chhota timer pill hida rahega (sirf niche wala lock bar rahega). OFF: Target video par chhota timer pill dikhega.",
+                        text = "ON: YouTube open hone par 'Opening...' ka overlay poori screen par full-screen size mein aayega. OFF: Chhota bottom pill dikhega.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.sp
