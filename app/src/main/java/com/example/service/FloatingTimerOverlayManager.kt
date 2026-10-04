@@ -84,6 +84,9 @@ class FloatingTimerOverlayManager(private val context: Context) {
     private var suggestedLockProgressFillView: View? = null
     private var suggestedLockStatusTagView: TextView? = null
 
+    // Player drag-down / swipe-down freeze lock overlay
+    private var playerLockRootView: FrameLayout? = null
+
     private var isAttached = false
     private var currentCommentCount = 0
     private var isTaskLiked = false
@@ -546,6 +549,93 @@ class FloatingTimerOverlayManager(private val context: Context) {
 
             // Lock the suggested videos section below the comments so it cannot be clicked or scrolled
             showSuggestedVideosLockOverlay()
+
+            // Lock the video player area at top to prevent dragging down or minimizing the video
+            showPlayerDragLockOverlay()
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun showPlayerDragLockOverlay() {
+        if (!Settings.canDrawOverlays(context)) return
+
+        playerLockRootView?.let { prev ->
+            try { windowManager.removeView(prev) } catch (_: Exception) {}
+            globalAttachedViews.remove(prev)
+        }
+        playerLockRootView = null
+
+        val screenWidth = context.resources.displayMetrics.widthPixels.coerceAtLeast(400)
+        val density = context.resources.displayMetrics.density
+        val statusBarHeight = (32 * density).toInt()
+        val playerHeightPx = statusBarHeight + ((screenWidth * 9) / 16).coerceAtLeast((220 * density).toInt())
+
+        val playerParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            playerHeightPx,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        }
+
+        var startX = 0f
+        var startY = 0f
+        var isDragging = false
+        val touchSlop = (12 * density)
+
+        val root = FrameLayout(context).apply {
+            setOnTouchListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startX = event.rawX
+                        startY = event.rawY
+                        isDragging = false
+                        false
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = Math.abs(event.rawX - startX)
+                        val dy = Math.abs(event.rawY - startY)
+                        if (dy > touchSlop || dx > touchSlop) {
+                            if (!isDragging) {
+                                isDragging = true
+                                try {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "🔒 Video player locked! (Minimizing / drag down disabled during task)",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } catch (_: Exception) {}
+                            }
+                            true // Intercept & consume drag gesture completely
+                        } else {
+                            false
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        val wasDragging = isDragging
+                        isDragging = false
+                        wasDragging
+                    }
+                    else -> false
+                }
+            }
+        }
+
+        try {
+            windowManager.addView(root, playerParams)
+            globalAttachedViews.add(root)
+            playerLockRootView = root
+            WatchSessionRepository.addLog("Player drag-down freeze lock active!", LogType.SUCCESS)
+        } catch (_: Exception) {
+            playerLockRootView = null
         }
     }
 
@@ -561,8 +651,8 @@ class FloatingTimerOverlayManager(private val context: Context) {
 
         val screenHeight = context.resources.displayMetrics.heightPixels.coerceAtLeast(800)
         val density = context.resources.displayMetrics.density
-        // Suggested videos section occupies the bottom ~46% of the screen under comments
-        val lockHeightPx = (screenHeight * 0.46f).toInt().coerceAtLeast((330 * density).toInt())
+        // Suggested videos section occupies the bottom ~54% of the screen under comments and actions
+        val lockHeightPx = (screenHeight * 0.54f).toInt().coerceAtLeast((360 * density).toInt())
 
         val lockParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -1587,6 +1677,10 @@ class FloatingTimerOverlayManager(private val context: Context) {
                 try { windowManager.removeView(lockView) } catch (_: Exception) {}
             }
             suggestedLockRootView = null
+            playerLockRootView?.let { pLock ->
+                try { windowManager.removeView(pLock) } catch (_: Exception) {}
+            }
+            playerLockRootView = null
             suggestedLockTimerTextView = null
             suggestedLockProgressFillView = null
             suggestedLockStatusTagView = null

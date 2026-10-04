@@ -979,6 +979,8 @@ object CloudDriveServerManager {
                     .url(apiUrl)
                     .header("User-Agent", USER_AGENT)
                     .header("Accept", "application/vnd.github.v3+json")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
                     .get()
                     .build()
                 val res = httpClient.newCall(req).execute()
@@ -997,18 +999,24 @@ object CloudDriveServerManager {
                                 val aSize = asset.optLong("size", 0L)
                                 val aUpdated = asset.optString("updated_at", "")
                                 val aId = asset.optLong("id", 0L)
-                                if (aName.endsWith(".apk", ignoreCase = true) || aDownloadUrl.endsWith(".apk", ignoreCase = true)) {
+                                if (aName.endsWith(".apk", ignoreCase = true) || aDownloadUrl.endsWith(".apk", ignoreCase = true) || aName.contains("app", ignoreCase = true)) {
                                     val timeMillis = try {
                                         java.time.Instant.parse(aUpdated).toEpochMilli()
                                     } catch (_: Exception) {
-                                        0L
+                                        try {
+                                            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                                            sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                                            sdf.parse(aUpdated.replace("Z", ""))?.time ?: 0L
+                                        } catch (_: Exception) {
+                                            0L
+                                        }
                                     }
-                                    val safeTime = if (timeMillis > 1_000_000_000_000L) timeMillis else System.currentTimeMillis()
-                                    val syntheticStamp = Math.abs("gh_${aId}_${aUpdated}_${aSize}".hashCode().toLong()).coerceAtLeast(1L)
+                                    val safeTime = if (timeMillis > 0L) timeMillis else Math.abs("gh_${aId}_${aUpdated}_${aSize}".hashCode().toLong()).coerceAtLeast(1L)
+                                    val stableFileId = "gh_${owner}_${repo}_${aId}_${aSize}"
                                     return AppUpdateInfo(
                                         hasUpdate = true,
-                                        fileId = "gh_${aId}",
-                                        fileName = "KingoKing_Update",
+                                        fileId = stableFileId,
+                                        fileName = aName.ifBlank { "KingoKing_Update.apk" },
                                         updatedAtMillis = safeTime,
                                         fileSize = aSize,
                                         downloadUrl = aDownloadUrl
@@ -1029,6 +1037,9 @@ object CloudDriveServerManager {
                     .url(directDownloadUrl)
                     .header("User-Agent", USER_AGENT)
                     .header("Accept", "*/*")
+                    .header("Range", "bytes=0-1024")
+                    .header("Cache-Control", "no-cache")
+                    .header("Pragma", "no-cache")
                     .get()
                     .build()
                 val headRes = httpClient.newCall(headReq).execute()
@@ -1043,23 +1054,25 @@ object CloudDriveServerManager {
                     } catch (_: Exception) { 0L }
                 } else 0L
 
-                val safeTime = if (timeMillis > 1_000_000_000_000L) timeMillis else System.currentTimeMillis()
-                val syntheticStamp = Math.abs("${directDownloadUrl}_${etag}_${clen}_${lastMod}".hashCode().toLong()).coerceAtLeast(1L)
+                val hashKey = "${directDownloadUrl}_${etag}_${clen}_${lastMod}"
+                val stableTime = if (timeMillis > 0L) timeMillis else Math.abs(hashKey.hashCode().toLong()).coerceAtLeast(1L)
+                val syntheticStamp = Math.abs(hashKey.hashCode().toLong()).coerceAtLeast(1L)
                 return AppUpdateInfo(
                     hasUpdate = true,
-                    fileId = "gh_${syntheticStamp}",
-                    fileName = "KingoKing_Update",
-                    updatedAtMillis = safeTime,
+                    fileId = "gh_head_${syntheticStamp}",
+                    fileName = "KingoKing_Update.apk",
+                    updatedAtMillis = stableTime,
                     fileSize = clen,
                     downloadUrl = directDownloadUrl
                 )
             } catch (_: Exception) {}
 
+            val stableFallbackId = Math.abs(directDownloadUrl.hashCode().toLong()).coerceAtLeast(1L)
             return AppUpdateInfo(
                 hasUpdate = true,
-                fileId = "gh_${Math.abs(directDownloadUrl.hashCode())}",
-                fileName = "KingoKing_Update",
-                updatedAtMillis = System.currentTimeMillis(),
+                fileId = "gh_url_${stableFallbackId}",
+                fileName = "KingoKing_Update.apk",
+                updatedAtMillis = stableFallbackId,
                 fileSize = 0L,
                 downloadUrl = directDownloadUrl
             )

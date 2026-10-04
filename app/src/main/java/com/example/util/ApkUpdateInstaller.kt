@@ -123,20 +123,12 @@ object ApkUpdateInstaller {
         return try {
             val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             val currentLastUpdateTime = pkgInfo.lastUpdateTime
-            val firstInstallTime = pkgInfo.firstInstallTime
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val preInstallTime = prefs.getLong(KEY_PRE_INSTALL_UPDATE_TIME, 0L)
             val pendingSig = prefs.getString(KEY_PENDING_SIGNATURE, "") ?: ""
 
-            // 1. If we launched an install for this signature and Android updated the package (lastUpdateTime increased)
-            if (pendingSig == updateInfo.signature && preInstallTime > 0L && currentLastUpdateTime > preInstallTime) {
-                return true
-            }
-            // 2. If the app on device was installed/updated at or after the APK was uploaded to Google Drive (+2m buffer)
-            if (updateInfo.updatedAtMillis > 1_000_000_000_000L &&
-                (currentLastUpdateTime >= (updateInfo.updatedAtMillis - 120_000L) ||
-                 firstInstallTime >= (updateInfo.updatedAtMillis - 120_000L))
-            ) {
+            // 1. If we triggered an in-app install for this signature and Android package was updated
+            if (pendingSig.isNotBlank() && pendingSig == updateInfo.signature && preInstallTime > 0L && currentLastUpdateTime > preInstallTime) {
                 return true
             }
             false

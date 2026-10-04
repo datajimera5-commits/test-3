@@ -3403,28 +3403,29 @@ class YouTubeLiveSearchService : AccessibilityService() {
             return true
         }
         val screenHeight = resources.displayMetrics.heightPixels.coerceAtLeast(800)
+        
+        // True comment sheet or composer is open ONLY when active composer, close button, or engagement panel is displayed
+        val hasCloseCommentBtn = entries.any { e ->
+            val d = e.desc.trim().lowercase()
+            val v = e.viewId.lowercase()
+            (d == "close comments" || d == "टिप्पणियां बंद करें" || d.contains("close comment") || d == "close live chat" ||
+             (d == "close" && (v.contains("close_button") || v.contains("panel") || v.contains("sheet") || v.contains("header")))) &&
+            e.rect.top in (screenHeight * 0.10f).toInt()..(screenHeight * 0.95f).toInt()
+        }
+        if (hasCloseCommentBtn) return true
+
         return entries.any { e ->
             val v = e.viewId.lowercase()
             val d = e.desc.trim().lowercase()
             val t = e.text.trim().lowercase()
             val comb = "$t $d $v"
 
-            (e.isEditable && (v.contains("comment") || v.contains("reply") || v.contains("composer"))) ||
+            (e.isEditable && (v.contains("comment") || v.contains("reply") || v.contains("composer") || v.contains("input"))) ||
             v.contains("comment_sheet") ||
             v.contains("comment_composer") ||
             v.contains("comment_box") ||
-            (v.contains("engagement_panel") && (comb.contains("comment") || comb.contains("टिप्पणी") || comb.contains("chat"))) ||
-            (e.rect.top in (screenHeight * 0.15f).toInt()..(screenHeight * 0.58f).toInt() && (
-                t == "comments" || d == "comments" || t == "टिप्पणियां" || d == "टिप्पणियां" ||
-                t.contains("community guidelines") || comb.contains("respectful by following") ||
-                comb.contains("top messages") || comb.contains("live chat")
-            )) ||
-            ((d == "close comments" || d == "टिप्पणियां बंद करें" || d.contains("close comment") || (d == "close" && v.contains("close_button")) || d == "close live chat") &&
-             e.rect.top in (screenHeight * 0.15f).toInt()..(screenHeight * 0.95f).toInt()) ||
-            comb.contains("add a comment") ||
-            comb.contains("add a reply") ||
-            comb.contains("टिप्पणी जोड़ें") ||
-            comb.contains("जवाब जोड़ें")
+            (v.contains("engagement_panel") && (v.contains("comment") || comb.contains("comment_item") || comb.contains("टिप्पणी") || comb.contains("live chat"))) ||
+            (t.contains("community guidelines") || comb.contains("respectful by following") || comb.contains("top messages"))
         }
     }
 
