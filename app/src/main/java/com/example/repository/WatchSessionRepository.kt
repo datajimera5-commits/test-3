@@ -130,6 +130,7 @@ object WatchSessionRepository {
     var onServiceTaskIncomplete: ((taskId: String, reason: String, lockDurationMillis: Long) -> Unit)? = null
     var onMilestoneCoinsAwarded: ((coins: Int, title: String) -> Unit)? = null
     var onPlaybackStateUpdated: ((isPlaying: Boolean) -> Unit)? = null
+    var onCommentSheetVisibilityChanged: ((isOpen: Boolean) -> Unit)? = null
 
     fun triggerTaskIncomplete(reason: String) {
         val currentState = _sessionState.value

@@ -854,7 +854,14 @@ class YouTubeLiveSearchService : AccessibilityService() {
                     // Harmless comment click on target video (reading comments, opening comments box, typing, etc.)
                     lastCommentClickTime = System.currentTimeMillis()
                     lastCommentComposerOpenTime = System.currentTimeMillis()
-                    wasCommentComposerOpen = true
+                    val isCloseAction = desc.equals("Close", ignoreCase = true) ||
+                            desc.equals("Close comments", ignoreCase = true) ||
+                            desc.equals("Close chat", ignoreCase = true) ||
+                            desc.equals("Close live chat", ignoreCase = true) ||
+                            desc.contains("बंद करें") ||
+                            text.equals("Close", ignoreCase = true)
+                    wasCommentComposerOpen = !isCloseAction
+                    updateCommentSheetState(!isCloseAction)
                 } else if (isProductRelated) {
                     // Harmless click on target video's own product list / shopping shelf / tagged products
                     lastProductClickTime = System.currentTimeMillis()
@@ -886,6 +893,22 @@ class YouTubeLiveSearchService : AccessibilityService() {
                         confirmWatchPlayerOpened()
                     }
                     checkPlaybackControls(ytRoot)
+
+                    val isSheetOpen = isCommentOrChatSheetCurrentlyOpen(ytRoot)
+                    updateCommentSheetState(isSheetOpen)
+
+                    // Unlocked Area Scroll Lock: If user tries to scroll the main watch page (not comment/chat), counter-scroll to lock it at the top
+                    if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED && isSessionActive && isWatchPlayerConfirmedOpen && !isSheetOpen) {
+                        try {
+                            val src = event.source
+                            if (src != null && src.isScrollable) {
+                                src.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                            } else {
+                                ytRoot.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                            }
+                        } catch (_: Exception) {}
+                    }
+
                     if (isSessionActive && isReadyForWatchVerification()) {
                         val now = System.currentTimeMillis()
                         if (now - lastWatchHeaderCheckTime >= 400L) {
@@ -2732,6 +2755,70 @@ class YouTubeLiveSearchService : AccessibilityService() {
             }
         } catch (_: Exception) {}
         return roots
+    }
+
+    @Volatile
+    private var lastReportedCommentSheetState: Boolean = false
+
+    private fun updateCommentSheetState(isOpen: Boolean) {
+        if (lastReportedCommentSheetState != isOpen) {
+            lastReportedCommentSheetState = isOpen
+            WatchSessionRepository.onCommentSheetVisibilityChanged?.invoke(isOpen)
+        }
+    }
+
+    private fun isCommentOrChatSheetCurrentlyOpen(root: AccessibilityNodeInfo?): Boolean {
+        if (isSoftKeyboardVisible()) return true
+        val node = root ?: getYouTubeRootNode() ?: return false
+        val now = System.currentTimeMillis()
+        if (wasCommentComposerOpen && (now - lastCommentComposerOpenTime) < 3000L) {
+            return true
+        }
+        return checkCommentOrChatNodes(node)
+    }
+
+    private fun checkCommentOrChatNodes(node: AccessibilityNodeInfo?): Boolean {
+        if (node == null) return false
+        if (node.isVisibleToUser) {
+            val vId = node.viewIdResourceName?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            val text = node.text?.toString()?.lowercase() ?: ""
+
+            val isPanelOrSheet = vId.contains("engagement_panel") ||
+                    vId.contains("bottom_sheet") ||
+                    vId.contains("comment_composer") ||
+                    vId.contains("live_chat") ||
+                    vId.contains("chat_input") ||
+                    vId.contains("comment_box") ||
+                    vId.contains("reply_composer")
+
+            val isCommentHeaderOrChatHeader = desc.equals("close live chat", ignoreCase = true) ||
+                    desc.equals("close chat", ignoreCase = true) ||
+                    desc.equals("close comments", ignoreCase = true) ||
+                    desc.equals("close engagement panel", ignoreCase = true) ||
+                    text.equals("live chat", ignoreCase = true) ||
+                    text.equals("top messages", ignoreCase = true) ||
+                    text.equals("chat...", ignoreCase = true) ||
+                    text.equals("add a comment...", ignoreCase = true) ||
+                    text.equals("add a reply...", ignoreCase = true) ||
+                    desc.contains("टिप्पणी बंद करें") ||
+                    desc.contains("लाइव चैट बंद करें")
+
+            if (isPanelOrSheet && isCommentHeaderOrChatHeader) {
+                return true
+            }
+            if (isCommentHeaderOrChatHeader && (desc.contains("close") || desc.contains("बंद"))) {
+                return true
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = checkCommentOrChatNodes(child)
+            child.recycle()
+            if (found) return true
+        }
+        return false
     }
 
     private fun isSoftKeyboardVisible(): Boolean {

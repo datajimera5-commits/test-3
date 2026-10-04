@@ -100,6 +100,23 @@ class FloatingTimerOverlayManager(private val context: Context) {
         WatchSessionRepository.onTaskCommentDetected = {
             runOnMain { handleCommentDetected() }
         }
+        WatchSessionRepository.onCommentSheetVisibilityChanged = { isOpen ->
+            runOnMain { setSuggestedLockVisible(!isOpen) }
+        }
+    }
+
+    fun setSuggestedLockVisible(visible: Boolean) {
+        runOnMain {
+            if (visible) {
+                if (suggestedLockRootView != null) {
+                    suggestedLockRootView?.visibility = View.VISIBLE
+                } else if (isAttached && WatchSessionRepository.sessionState.value == com.example.data.SessionState.ACTIVE) {
+                    showSuggestedVideosLockOverlay()
+                }
+            } else {
+                suggestedLockRootView?.visibility = View.GONE
+            }
+        }
     }
 
     private fun runOnMain(action: () -> Unit) {
