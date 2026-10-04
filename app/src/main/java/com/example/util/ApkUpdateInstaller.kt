@@ -163,70 +163,7 @@ object ApkUpdateInstaller {
             return true
         }
 
-        return try {
-            val pkgInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            val currentLastUpdateTime = pkgInfo.lastUpdateTime
-            val firstInstallTime = pkgInfo.firstInstallTime
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val lastRecorded = prefs.getLong(KEY_LAST_RECORDED_APP_UPDATE_TIME, 0L)
-
-            // 1. Fresh installation or newly installed APK:
-            // When user downloads and installs/updates the app (e.g. from referral link or direct download),
-            // Android sets lastUpdateTime. If lastRecorded is 0, or lastRecorded != currentLastUpdateTime,
-            // or installedSignature is blank, this is the freshly downloaded app!
-            // It MUST NOT ask to update immediately. It will only ask next time after a new update is uploaded.
-            if (lastRecorded != currentLastUpdateTime || installedSignature.isBlank()) {
-                prefs.edit()
-                    .putLong(KEY_LAST_RECORDED_APP_UPDATE_TIME, currentLastUpdateTime)
-                    .putString(KEY_PENDING_SIGNATURE, updateInfo.signature)
-                    .apply()
-                return true
-            }
-
-            // 2. If app on device was installed or updated at or after the remote APK was uploaded
-            if (updateInfo.updatedAtMillis > 1_000_000_000_000L) {
-                if (currentLastUpdateTime >= (updateInfo.updatedAtMillis - 120_000L) ||
-                    firstInstallTime >= (updateInfo.updatedAtMillis - 120_000L)
-                ) {
-                    return true
-                }
-            }
-
-            // 3. Compare local cached APK versionCode if present
-            val installedVerCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                pkgInfo.longVersionCode
-            } else {
-                pkgInfo.versionCode.toLong()
-            }
-
-            val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
-            val updatesDir = File(baseDir, "updates")
-            val cachedApk = File(updatesDir, "KingoKing_Update.apk")
-            val publicDownloadsApk = File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "KingoKing_Update.apk"
-            )
-            val localApk = if (cachedApk.exists() && cachedApk.length() > 10_000L) {
-                cachedApk
-            } else if (publicDownloadsApk.exists() && publicDownloadsApk.length() > 10_000L) {
-                publicDownloadsApk
-            } else {
-                null
-            }
-
-            if (localApk != null) {
-                val report = inspectApkCompatibility(context, localApk)
-                if (report.isValidApk && report.archiveVersionCode > 0L) {
-                    if (installedVerCode >= report.archiveVersionCode) {
-                        return true
-                    }
-                }
-            }
-
-            false
-        } catch (_: Exception) {
-            true
-        }
+        return false
     }
 
     fun wasInstallAttemptedForSignature(context: Context, signature: String): Boolean {

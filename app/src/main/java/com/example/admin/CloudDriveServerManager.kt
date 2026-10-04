@@ -458,17 +458,35 @@ object CloudDriveServerManager {
                         }
                     }
 
-                    // Fallback: if Apps Script didn't return appUpdate (or returned empty) and an update folder/file URL is configured, inspect it directly
+                    // Fallback: check configured update folder and appDownloadUrl (GitHub Releases URL)
                     val effectiveFolderUrl = remoteConfiguredUpdateUrl ?: dataStoreManager.updateDriveFolderUrlFlow.first()
+                    val effectiveAppDlUrl = remoteConfiguredAppDownloadUrl ?: dataStoreManager.appDownloadUrlFlow.first()
+
                     if ((resolvedUpdate == null || !resolvedUpdate.hasUpdate) && effectiveFolderUrl.isNotBlank()) {
                         val folderUpdate = inspectPublicDriveUpdateLink(effectiveFolderUrl)
-                        if (folderUpdate != null) {
+                        if (folderUpdate != null && folderUpdate.hasUpdate) {
                             resolvedUpdate = folderUpdate
+                        }
+                    }
+
+                    if ((resolvedUpdate == null || !resolvedUpdate.hasUpdate) && effectiveAppDlUrl.isNotBlank()) {
+                        val dlUpdate = inspectPublicDriveUpdateLink(effectiveAppDlUrl)
+                        if (dlUpdate != null && dlUpdate.hasUpdate) {
+                            resolvedUpdate = dlUpdate
                         }
                     }
 
                     if (resolvedUpdate != null) {
                         dataStoreManager.saveRemoteAppUpdate(resolvedUpdate)
+                    }
+                } else {
+                    // When remoteJson is null, still inspect appDownloadUrl (GitHub Releases) so updates work independently
+                    val effectiveAppDlUrl = dataStoreManager.appDownloadUrlFlow.first().ifBlank { DataStoreManager.DEFAULT_APP_DOWNLOAD_URL }
+                    if (effectiveAppDlUrl.isNotBlank()) {
+                        val dlUpdate = inspectPublicDriveUpdateLink(effectiveAppDlUrl)
+                        if (dlUpdate != null && dlUpdate.hasUpdate) {
+                            dataStoreManager.saveRemoteAppUpdate(dlUpdate)
+                        }
                     }
                 }
 
