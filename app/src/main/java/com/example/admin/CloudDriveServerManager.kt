@@ -999,6 +999,7 @@ object CloudDriveServerManager {
                                 val aSize = asset.optLong("size", 0L)
                                 val aUpdated = asset.optString("updated_at", "")
                                 val aId = asset.optLong("id", 0L)
+                                val aDigest = asset.optString("digest", "")
                                 if (aName.endsWith(".apk", ignoreCase = true) || aDownloadUrl.endsWith(".apk", ignoreCase = true) || aName.contains("app", ignoreCase = true)) {
                                     val timeMillis = try {
                                         java.time.Instant.parse(aUpdated).toEpochMilli()
@@ -1011,8 +1012,10 @@ object CloudDriveServerManager {
                                             0L
                                         }
                                     }
-                                    val safeTime = if (timeMillis > 0L) timeMillis else Math.abs("gh_${aId}_${aUpdated}_${aSize}".hashCode().toLong()).coerceAtLeast(1L)
-                                    val stableFileId = "gh_${owner}_${repo}_${aId}_${aSize}"
+                                    val digestHash = if (aDigest.isNotBlank()) Math.abs(aDigest.hashCode().toLong()) else 0L
+                                    val safeTime = if (timeMillis > 0L) (timeMillis + digestHash) else Math.abs("gh_${aId}_${aUpdated}_${aSize}_${aDigest}".hashCode().toLong()).coerceAtLeast(1L)
+                                    val digestSuffix = if (aDigest.isNotBlank()) "_${aDigest.takeLast(16)}" else ""
+                                    val stableFileId = "gh_${owner}_${repo}_${aId}_${aSize}${digestSuffix}"
                                     return AppUpdateInfo(
                                         hasUpdate = true,
                                         fileId = stableFileId,

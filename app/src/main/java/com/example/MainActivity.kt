@@ -224,9 +224,6 @@ fun WatchEarnApp(
         if (pendingUpdate != null && pendingUpdate.hasUpdate) {
             if (isAlreadyUpToDate && installedUpdateSignature != pendingUpdate.signature) {
                 viewModel.markAppUpdateInstalled(pendingUpdate.signature)
-            } else if (installedUpdateSignature.isBlank()) {
-                // First run after fresh download: baseline current version so no update is prompted until admin publishes a new APK!
-                viewModel.markAppUpdateInstalled(pendingUpdate.signature)
             }
         }
     }

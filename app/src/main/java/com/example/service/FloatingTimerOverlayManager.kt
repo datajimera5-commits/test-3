@@ -140,7 +140,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
             }
 
             // If already attached and active, do not recreate or duplicate the overlay
-            if (isAttached && overlayRootView != null && incompletePopupView == null) {
+            if (isAttached && (overlayRootView != null || suggestedLockRootView != null) && incompletePopupView == null) {
                 return@runOnMain
             }
 
@@ -165,60 +165,69 @@ class FloatingTimerOverlayManager(private val context: Context) {
             }
 
             density = context.resources.displayMetrics.density
-            val hudWidthPx = (242 * density).toInt()
-            progressTrackWidthPx = hudWidthPx - (22 * density).toInt()
 
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_PHONE
-                },
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = (12 * density).toInt()
-                y = (76 * density).toInt()
-            }
+            // Check admin opening overlay toggle:
+            // When opening toggle is ON -> Top timer pill overlay is HIDDEN during video playback (only bottom lock bar stays)
+            // When opening toggle is OFF -> Top timer pill overlay IS SHOWN over the video
+            val prefs = context.getSharedPreferences("watchearn_prefs", Context.MODE_PRIVATE)
+            val isOpeningToggleOn = prefs.getBoolean("full_screen_opening_overlay", true)
+            val shouldShowTopPill = !isOpeningToggleOn
 
-            val root = FrameLayout(context).apply {
-                clipChildren = false
-                clipToPadding = false
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-            }
+            if (shouldShowTopPill) {
+                val hudWidthPx = (242 * density).toInt()
+                progressTrackWidthPx = hudWidthPx - (22 * density).toInt()
 
-            // Professional Compact 2-Row HUD Card Container
-            val pillLayout = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = FrameLayout.LayoutParams(
-                    hudWidthPx,
-                    FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-                setPadding(
-                    (11 * density).toInt(),
-                    (8 * density).toInt(),
-                    (11 * density).toInt(),
-                    (8 * density).toInt()
-                )
-
-                val bg = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = 16 * density
-                    setColor(Color.parseColor("#EB0B1120")) // Translucent Deep Obsidian
-                    setStroke((1.3f * density).toInt(), Color.parseColor("#F59E0B")) // Sleek Gold Border
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    } else {
+                        @Suppress("DEPRECATION")
+                        WindowManager.LayoutParams.TYPE_PHONE
+                    },
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    x = (12 * density).toInt()
+                    y = (76 * density).toInt()
                 }
-                background = bg
-                elevation = 18 * density
-            }
+
+                val root = FrameLayout(context).apply {
+                    clipChildren = false
+                    clipToPadding = false
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                }
+
+                // Professional Compact 2-Row HUD Card Container
+                val pillLayout = LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = FrameLayout.LayoutParams(
+                        hudWidthPx,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    setPadding(
+                        (11 * density).toInt(),
+                        (8 * density).toInt(),
+                        (11 * density).toInt(),
+                        (8 * density).toInt()
+                    )
+
+                    val bg = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = 16 * density
+                        setColor(Color.parseColor("#EB0B1120")) // Translucent Deep Obsidian
+                        setStroke((1.3f * density).toInt(), Color.parseColor("#F59E0B")) // Sleek Gold Border
+                    }
+                    background = bg
+                    elevation = 18 * density
+                }
 
             // ================= ROW 1: Live Dot + Status + Timer + Milestone + Close =================
             val topRow = LinearLayout(context).apply {
@@ -488,16 +497,20 @@ class FloatingTimerOverlayManager(private val context: Context) {
                 }
             }
 
-            try {
-                windowManager.addView(root, params)
-                globalAttachedViews.add(root)
-                overlayRootView = root
-                isAttached = true
-                WatchSessionRepository.addLog("Side floating watch pill active on screen!", LogType.SUCCESS)
-            } catch (e: Exception) {
-                isAttached = false
-                WatchSessionRepository.addLog("Failed to add floating timer: ${e.message}", LogType.ERROR)
+                try {
+                    windowManager.addView(root, params)
+                    globalAttachedViews.add(root)
+                    overlayRootView = root
+                    WatchSessionRepository.addLog("Side floating watch pill active on screen!", LogType.SUCCESS)
+                } catch (e: Exception) {
+                    WatchSessionRepository.addLog("Failed to add floating timer: ${e.message}", LogType.ERROR)
+                }
+            } else {
+                overlayRootView = null
+                WatchSessionRepository.addLog("Opening overlay toggle is ON: Top floating watch pill hidden (lock bar only).", LogType.INFO)
             }
+
+            isAttached = true
 
             // Hook live auto-detection listeners from accessibility & repository
             WatchSessionRepository.onTaskLikeDetected = {
@@ -649,14 +662,11 @@ class FloatingTimerOverlayManager(private val context: Context) {
         }
         suggestedLockRootView = null
 
-        val screenHeight = context.resources.displayMetrics.heightPixels.coerceAtLeast(800)
         val density = context.resources.displayMetrics.density
-        // Suggested videos section occupies the bottom ~54% of the screen under comments and actions
-        val lockHeightPx = (screenHeight * 0.54f).toInt().coerceAtLeast((360 * density).toInt())
 
         val lockParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            lockHeightPx,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -671,6 +681,10 @@ class FloatingTimerOverlayManager(private val context: Context) {
         }
 
         val root = FrameLayout(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
             // Absolute Lock: Intercept & consume 100% of touches, scrolls, and clicks so underlying YouTube suggestions are completely locked!
             setOnTouchListener { _, event ->
                 if (event.action == MotionEvent.ACTION_UP) {
@@ -691,7 +705,7 @@ class FloatingTimerOverlayManager(private val context: Context) {
             gravity = Gravity.CENTER_HORIZONTAL
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
+                FrameLayout.LayoutParams.WRAP_CONTENT
             )
             setPadding(
                 (18 * density).toInt(),

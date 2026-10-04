@@ -13,29 +13,15 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
+    applicationId = "com.example.kingo.rfumiv"
     minSdk = 26
     targetSdk = 36
     val autoVersionCode = ((System.currentTimeMillis() / 60000L) - 29000000L).toInt().coerceAtLeast(10)
     versionCode = autoVersionCode
     versionName = "2.0.$autoVersionCode"
 
+    buildConfigField("String", "APP_ROLE", "\"USER\"")
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  }
-
-  flavorDimensions += "role"
-  productFlavors {
-    create("admin") {
-      dimension = "role"
-      applicationId = "com.example.kingo.rfumiv"
-      resValue("string", "app_name", "Kingo Admin")
-      buildConfigField("String", "APP_ROLE", "\"ADMIN\"")
-    }
-    create("user") {
-      dimension = "role"
-      applicationId = "com.example.kingo.rfumiv"
-      resValue("string", "app_name", "Kingo King")
-      buildConfigField("String", "APP_ROLE", "\"USER\"")
-    }
   }
 
   signingConfigs {
